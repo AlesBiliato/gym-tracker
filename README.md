@@ -25,8 +25,9 @@ Pensada para usarse con una mano, en el gimnasio y con mala cobertura: cada toqu
 Registrar series en el móvil entre serie y serie suele ser lento y propenso a errores. Aquí el objetivo es que **registrar una serie cueste 2–3 toques**:
 
 1. La sesión que toca se abre con todo precargado (objetivo del plan y lo hecho la última vez).
-2. Un toque en ✓ marca la serie como "hecha tal cual" y arranca el temporizador de descanso.
-3. Si algo cambia, se toca la fila y se ajusta peso, repeticiones, RIR o fallo con botones grandes.
+2. Un toque en ✓ guarda la serie (repeticiones de la última vez en esa serie, o el máximo del rango) y arranca el temporizador de descanso.
+3. Durante el descanso aparecen, justo debajo, botones grandes de repeticiones y RIR: un toque corrige y, si no se toca nada, la serie se queda como está. Un RIR sin indicar **no cuenta** para subir de carga.
+4. Para algo más complejo (peso, fallo, repeticiones por lado), se toca la fila y se abre el editor.
 
 ## Funcionalidades
 

@@ -90,3 +90,64 @@ export function statusOnClose(current: ExerciseStatus, doneSets: number, planned
   }
   return current
 }
+
+// ---------- Serie rápida (✓) ----------
+
+export interface LastSetRef {
+  index: number
+  w?: number | null
+  l?: number | null
+  r?: number | null
+  reps: number | null
+  done?: boolean
+  /** Repeticiones previstas, no medidas (importadas): no cuentan como "lo que hice". */
+  estimated?: boolean
+}
+
+export interface QuickValues {
+  w: number | null
+  l: number | null
+  r: number | null
+  reps: number
+  /** "No indicado": solo cuenta como RIR medido si se elige con los botones o en el editor. */
+  rir: null
+  failed: false
+}
+
+/**
+ * Repeticiones de la serie rápida: lo que hice la última vez en ESA serie (si se midió);
+ * si no hay, el máximo del rango. Con un rango fijo (6–6) es simplemente ese valor.
+ */
+export function quickReps(plan: Pick<PlanSnapshot, 'repMin' | 'repMax'>, index: number, last: LastSetRef[] | null | undefined): number {
+  const prev = last?.find((s) => s.index === index && s.done !== false)
+  if (prev && prev.reps != null && prev.reps > 0 && !prev.estimated) return prev.reps
+  return plan.repMax || plan.repMin || 1
+}
+
+/** Valores con los que se guarda una serie al pulsar ✓: carga del plan (o de la última vez si falta) y RIR sin indicar. */
+export function quickSet(
+  plan: PlanSnapshot, index: number, last: LastSetRef[] | null | undefined, unilateral: boolean,
+): QuickValues {
+  const t = targetForSet(plan, index)
+  const prev = last ? (last.find((s) => s.index === index) ?? last[last.length - 1]) : undefined
+  return {
+    w: t.w ?? (unilateral ? null : prev?.w ?? null),
+    l: t.l ?? (unilateral ? prev?.l ?? null : null),
+    r: t.r ?? (unilateral ? prev?.r ?? null : null),
+    reps: quickReps(plan, index, last),
+    rir: null,
+    failed: false,
+  }
+}
+
+/** Botones de repeticiones para corregir: del mínimo del rango −2 al máximo +2 (siempre incluye el valor actual). */
+export function repsOptions(plan: Pick<PlanSnapshot, 'repMin' | 'repMax'>, current?: number | null): number[] {
+  const hi = (plan.repMax || plan.repMin || current || 8) + 2
+  const lo = Math.max(1, (plan.repMin || plan.repMax || current || 8) - 2)
+  const list = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+  if (current != null && current > 0 && !list.includes(current)) list.push(current)
+  return list.sort((a, b) => a - b)
+}
+
+/** Botones de RIR: 0, 1, 2, 3 y 4+ (el último guarda 4). */
+export const RIR_OPTIONS = [0, 1, 2, 3, 4] as const

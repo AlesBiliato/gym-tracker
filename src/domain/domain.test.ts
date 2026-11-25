@@ -3,7 +3,7 @@ import { formatDate, formatDateTime, formatKg, parseNumber, daysBetween, formatC
 import {
   buildImport, matchExercise, parseDate, parseObs, parseScheme, parseWeights, templateCodeFrom,
 } from './importer'
-import { deriveStatus, nextTemplateCode, orderItems, statusOnClose, summarize, targetForSet } from './sessionPlan'
+import { deriveStatus, nextTemplateCode, orderItems, quickReps, quickSet, repsOptions, RIR_OPTIONS, statusOnClose, summarize, targetForSet } from './sessionPlan'
 import { buildSeed } from '../db/seed'
 
 describe('formato es-ES', () => {
@@ -167,5 +167,52 @@ describe('estado del ejercicio: En curso vs Parcial', () => {
     expect(statusOnClose('pendiente', 0, 3)).toBe('no_hecho')
     expect(statusOnClose('no_hecho', 0, 3)).toBe('no_hecho')
     expect(statusOnClose('sustituido', 2, 3)).toBe('sustituido')
+  })
+})
+
+describe('serie rápida (✓)', () => {
+  const plan = (repMin: number, repMax: number, ws: number[]) => ({
+    sets: ws.length, repMin, repMax, targets: ws.map((w) => ({ w })), restSecMin: 90, restSecMax: 120, targetRir: 2, notes: '', perSide: false,
+  })
+  const last = (reps: (number | null)[], estimated = false) => reps.map((r, index) => ({ index, w: 40, reps: r, done: true, estimated }))
+
+  it('sin historial: las reps son el MÁXIMO del rango; con rango fijo, ese valor', () => {
+    expect(quickReps(plan(8, 10, [40, 40, 40]), 0, null)).toBe(10)
+    expect(quickReps(plan(6, 6, [80]), 0, undefined)).toBe(6)
+  })
+  it('con historial: lo hecho la última vez en ESA serie', () => {
+    const l = last([10, 9, 8])
+    expect(quickReps(plan(8, 10, [40, 40, 40]), 0, l)).toBe(10)
+    expect(quickReps(plan(8, 10, [40, 40, 40]), 1, l)).toBe(9)
+    expect(quickReps(plan(8, 10, [40, 40, 40]), 2, l)).toBe(8)
+  })
+  it('si esa serie no existió la última vez, o eran reps estimadas (~), vuelve al máximo del rango', () => {
+    expect(quickReps(plan(8, 10, [40, 40, 40, 40]), 3, last([10, 9, 8]))).toBe(10)
+    expect(quickReps(plan(8, 10, [40, 40]), 0, last([8, 8], true))).toBe(10)
+    expect(quickReps(plan(8, 10, [40, 40]), 0, last([null, null]))).toBe(10)
+  })
+  it('el ✓ guarda el RIR como "no indicado" (null) y conserva la carga del plan', () => {
+    const q = quickSet(plan(8, 10, [40, 42.5]), 1, last([10, 9]), false)
+    expect(q).toEqual({ w: 42.5, l: null, r: null, reps: 9, rir: null, failed: false })
+  })
+  it('si el plan no trae carga, usa la de la última vez', () => {
+    const q = quickSet({ ...plan(8, 10, [40]), targets: [] }, 0, last([10]), false)
+    expect(q.w).toBe(40)
+  })
+  it('unilateral: la carga se toma por lado', () => {
+    const q = quickSet({ ...plan(8, 8, [0]), targets: [{ l: 26, r: 20 }] }, 0, null, true)
+    expect(q).toMatchObject({ l: 26, r: 20, w: null, reps: 8, rir: null })
+  })
+  it('botones de reps: del mínimo −2 al máximo +2', () => {
+    expect(repsOptions(plan(8, 10, []))).toEqual([6, 7, 8, 9, 10, 11, 12])
+    expect(repsOptions(plan(6, 6, []))).toEqual([4, 5, 6, 7, 8])
+    expect(repsOptions(plan(1, 2, []))).toEqual([1, 2, 3, 4]) // nunca por debajo de 1
+  })
+  it('los botones siempre incluyen el valor guardado, aunque esté fuera del rango', () => {
+    expect(repsOptions(plan(8, 10, []), 14)).toEqual([6, 7, 8, 9, 10, 11, 12, 14])
+    expect(repsOptions(plan(8, 10, []), 9)).toEqual([6, 7, 8, 9, 10, 11, 12])
+  })
+  it('botones de RIR: 0, 1, 2, 3 y 4+', () => {
+    expect([...RIR_OPTIONS]).toEqual([0, 1, 2, 3, 4])
   })
 })

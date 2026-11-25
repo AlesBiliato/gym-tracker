@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { Exercise, SessionExercise, SetLog, Settings } from '../db/types'
 import {
   applySuggestion, lastPerformance, revertSuggestion, saveSet, setExerciseStatus, setObs, setPlanSets, substituteExercise, undoSet,
 } from '../db/repo'
 import { formatDate, formatKg, formatRest } from '../domain/format'
-import { repsLabel, targetForSet } from '../domain/sessionPlan'
+import { quickSet, repsLabel, repsOptions, RIR_OPTIONS, targetForSet } from '../domain/sessionPlan'
 import { Sheet } from './ui'
 import SetEditor, { type SetValues } from './SetEditor'
 import { useRestTimer } from './RestTimer'
@@ -40,6 +40,8 @@ export default function ExerciseCard({
   const [editing, setEditing] = useState<number | null>(null)
   const [menu, setMenu] = useState(false)
   const [subst, setSubst] = useState(false)
+  /** Serie recién marcada con ✓ cuya corrección (reps/RIR) está visible durante su descanso. */
+  const [corr, setCorr] = useState<{ index: number; token: number } | null>(null)
 
   const plan = se.plan
   const bodyweight = ex.loadType === 'peso corporal'
@@ -47,17 +49,8 @@ export default function ExerciseCard({
   const byIndex = useMemo(() => new Map(sets.filter((s) => !s.deletedAt).map((s) => [s.index, s])), [sets])
   const doneCount = [...byIndex.values()].filter((s) => s.done).length
 
-  /** Valores de "hecha tal cual": objetivo del plan; reps de la última vez si el peso es el mismo. */
-  const quick = (i: number): SetValues => {
-    const t = targetForSet(plan, i)
-    const prev = last ? last.sets[Math.min(i, last.sets.length - 1)] : undefined
-    const w = t.w ?? (ex.unilateral ? null : prev?.w ?? null)
-    const l = t.l ?? (ex.unilateral ? prev?.l ?? null : null)
-    const r = t.r ?? (ex.unilateral ? prev?.r ?? null : null)
-    const same = prev && (ex.unilateral ? prev.l === l && prev.r === r : prev.w === w)
-    const reps = same && prev.reps != null && prev.reps >= plan.repMin && prev.reps <= plan.repMax ? prev.reps : plan.repMin
-    return { w, l, r, reps, rir: plan.targetRir, failed: false }
-  }
+  /** ✓: carga del plan, reps de la última vez en esa serie (o el máximo del rango) y RIR sin indicar. */
+  const quick = (i: number): SetValues => quickSet(plan, i, last?.sets, ex.unilateral)
 
   const targetLabel = (i: number) => {
     const t = targetForSet(plan, i)
@@ -67,13 +60,19 @@ export default function ExerciseCard({
     return `${load ? load + ' ' : ''}× ${repsLabel(plan)}`
   }
 
-  const commit = async (i: number, v: SetValues) => {
+  const commit = async (i: number, v: SetValues): Promise<number> => {
     await saveSet(se.id, i, { ...v, done: true, completedAt: new Date().toISOString() })
-    timer.start(plan.restSecMax)
+    return timer.start(plan.restSecMax)
   }
+  /** Un toque: guarda la serie y arranca el descanso; debajo salen los botones de corrección. */
   const toggleQuick = async (i: number) => {
-    if (byIndex.get(i)?.done) await undoSet(se.id, i)
-    else await commit(i, quick(i))
+    if (byIndex.get(i)?.done) {
+      if (corr?.index === i) setCorr(null)
+      await undoSet(se.id, i)
+    } else {
+      const token = await commit(i, quick(i))
+      setCorr({ index: i, token })
+    }
   }
 
   const rows = Math.max(plan.sets, ...[...byIndex.keys()].map((k) => k + 1))
@@ -127,8 +126,10 @@ export default function ExerciseCard({
                 const s = byIndex.get(i)
                 const done = !!s?.done
                 const label = targetLabel(i)
+                const showCorr = done && corr?.index === i && timer.token === corr.token
                 return (
-                  <div key={i} className={`flex items-center gap-2 rounded-2xl p-1 pl-3 ${done ? 'bg-emerald-500/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                  <Fragment key={i}>
+                  <div className={`flex items-center gap-2 rounded-2xl p-1 pl-3 ${done ? 'bg-emerald-500/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
                     <button disabled={readOnly} onClick={() => setEditing(i)} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 text-left">
                       <span className="w-6 text-sm font-bold text-slate-400">{i + 1}</span>
                       <span className="min-w-0">
@@ -136,7 +137,7 @@ export default function ExerciseCard({
                           <>
                             <span className="block truncate text-lg font-bold">{fmtSet(s!, ex.unilateral, bodyweight)}</span>
                             <span className="block text-sm text-slate-500">
-                              RIR {s!.rir ?? '–'}{s!.failed ? ' · fallo' : ''}
+                                        {s!.rir == null ? 'RIR sin indicar' : `RIR ${s!.rir}`}{s!.failed ? ' · fallo' : ''}
                             </span>
                           </>
                         ) : (
@@ -155,6 +156,14 @@ export default function ExerciseCard({
                       ✓
                     </button>
                   </div>
+                  {showCorr && (
+                    <QuickCorrection
+                      reps={s!.reps} rir={s!.rir} options={repsOptions(plan, s!.reps)}
+                      onReps={(n) => saveSet(se.id, i, { reps: n })}
+                      onRir={(n) => saveSet(se.id, i, { rir: n })}
+                    />
+                  )}
+                  </Fragment>
                 )
               })}
             </div>
@@ -247,6 +256,41 @@ function SuggestionNote({ se, unilateral, readOnly }: { se: SessionExercise; uni
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Corrección rápida bajo la serie, solo durante su descanso: un toque en las reps o en el RIR.
+ * Si no se toca nada, la serie se queda como se guardó (RIR sin indicar: no cuenta para subir carga).
+ */
+function QuickCorrection({ reps, rir, options, onReps, onRir }: {
+  reps: number | null; rir: number | null; options: number[]; onReps: (n: number) => void; onRir: (n: number) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  // El ✓ puede estar cerca del borde inferior: se asegura de que los botones queden a la vista.
+  useEffect(() => { ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [])
+  return (
+    <div ref={ref} className="space-y-3 rounded-2xl bg-sky-500/10 p-3" data-testid="quick-correction">
+      <div>
+        <p className="label">Repeticiones</p>
+        <div className={`grid gap-2 ${options.length <= 5 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          {options.map((n) => (
+            <button key={n} type="button" onClick={() => onReps(n)} aria-pressed={reps === n}
+              className={`btn min-h-14 px-0 text-xl ${reps === n ? 'btn-primary' : 'btn-soft'}`}>{n}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="label">RIR: repeticiones que te quedaban</p>
+        <div className="grid grid-cols-5 gap-2">
+          {RIR_OPTIONS.map((n) => (
+            <button key={n} type="button" onClick={() => onRir(n)} aria-pressed={rir === n}
+              className={`btn min-h-14 px-0 text-xl ${rir === n ? 'btn-primary' : 'btn-soft'}`}>{n === 4 ? '4+' : n}</button>
+          ))}
+        </div>
+      </div>
+      {rir == null && <p className="text-xs text-slate-500">Sin tocar el RIR, esta serie no cuenta para subir de carga.</p>}
     </div>
   )
 }

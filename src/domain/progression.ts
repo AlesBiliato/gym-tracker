@@ -155,6 +155,10 @@ export function suggestProgression(input: ProgressionInput): Suggestion {
   }
   if (done.length < last.plan.sets) return hold(`La última vez quedó incompleta (${done.length}/${last.plan.sets} series).`)
   if (measured.length < done.length) {
+    const noRir = done.filter((s) => !s.estimated && s.reps != null && s.rir == null).length
+    if (noRir > 0) {
+      return none(`${noRir} ${noRir === 1 ? 'serie sin RIR indicado' : 'series sin RIR indicado'}: toca el RIR tras cada serie para que cuente para subir.`)
+    }
     return none(`Solo ${measured.length} de ${done.length} series tienen repeticiones y RIR medidos: no decido la subida.`)
   }
   const repMax = last.plan.repMax || current.repMax

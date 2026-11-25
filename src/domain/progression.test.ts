@@ -187,3 +187,28 @@ describe('más peso del planificado: avisar y consolidar, nunca subir además', 
     expect(r.targets).toEqual(w(60, 60, 60))
   })
 })
+
+describe('RIR sin indicar (✓ rápido sin tocar el RIR) no cuenta para subir', () => {
+  const p = plan(w(60, 60, 60), 6, 6)
+  it('series con reps pero sin RIR: no se sube y se explica qué hacer', () => {
+    const r = run({ last: { date: 'x', plan: p, sets: sets([60, 60, 60], 6, 2).map((s) => ({ ...s, rir: null })) } })
+    expect(r.kind).toBe('sin_datos')
+    expect(r.reason).toMatch(/3 series sin RIR indicado/)
+    expect(r.changes).toBe(false)
+  })
+  it('una sola serie sin RIR basta para no subir', () => {
+    const s = sets([60, 60, 60], 6, 2)
+    s[1].rir = null
+    const r = run({ last: { date: 'x', plan: p, sets: s } })
+    expect(r.kind).toBe('sin_datos')
+    expect(r.reason).toMatch(/1 serie sin RIR indicado/)
+  })
+  it('con el RIR indicado en todas (botones tras el ✓) vuelve a subir', () => {
+    expect(run({ last: { date: 'x', plan: p, sets: sets([60, 60, 60], 6, 2) } }).kind).toBe('subir')
+  })
+  it('un fallo sigue frenando aunque falte el RIR', () => {
+    const s = sets([60, 60, 60], 6, 2).map((x) => ({ ...x, rir: null }))
+    s[2].failed = true
+    expect(run({ last: { date: 'x', plan: p, sets: s } }).kind).toBe('mantener')
+  })
+})

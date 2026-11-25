@@ -2,10 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { formatClock } from '../domain/format'
 
 interface TimerCtx {
-  start: (seconds: number) => void
+  /** Arranca un descanso y devuelve su identificador (para ligar a él la corrección de la serie). */
+  start: (seconds: number) => number
   stop: () => void
+  /** Identificador del descanso en curso; null si no hay ninguno. */
+  token: number | null
 }
-const Ctx = createContext<TimerCtx>({ start: () => {}, stop: () => {} })
+const Ctx = createContext<TimerCtx>({ start: () => 0, stop: () => {}, token: null })
 export const useRestTimer = () => useContext(Ctx)
 
 const KEY = 'restTimer'
@@ -32,7 +35,7 @@ function beep() {
  * pestaña en segundo plano, al volver el tiempo restante sigue siendo correcto.
  */
 export function RestTimerProvider({ children }: { children: ReactNode }) {
-  const [end, setEnd] = useState<{ endAt: number; total: number } | null>(() => {
+  const [end, setEnd] = useState<{ endAt: number; total: number; token: number } | null>(() => {
     try {
       const v = JSON.parse(sessionStorage.getItem(KEY) ?? 'null')
       return v && v.endAt > Date.now() - 15000 ? v : null
@@ -46,14 +49,16 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
   }
   const start = useCallback((seconds: number) => {
     fired.current = false
-    const v = { endAt: Date.now() + seconds * 1000, total: seconds }
+    const token = Date.now()
+    const v = { endAt: token + seconds * 1000, total: seconds, token }
     setEnd(v)
     persist(v)
+    return token
   }, [])
   const stop = useCallback(() => { setEnd(null); persist(null) }, [])
   const add = (s: number) => setEnd((e) => {
     if (!e) return e
-    const v = { endAt: e.endAt + s * 1000, total: e.total + s }
+    const v = { ...e, endAt: e.endAt + s * 1000, total: e.total + s }
     persist(v)
     fired.current = false
     return v
@@ -73,7 +78,7 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
   const over = end != null && remaining <= 0
 
   return (
-    <Ctx.Provider value={{ start, stop }}>
+    <Ctx.Provider value={{ start, stop, token: end?.token ?? null }}>
       {children}
       {end && (
         <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md px-3">
