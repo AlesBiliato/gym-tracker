@@ -94,7 +94,13 @@ export default function ExerciseCard({
 
   return (
     <div className={nested ? 'ml-4 border-l-4 border-sky-300 pl-3 dark:border-sky-800' : ''}>
-      <div className="card !p-0 overflow-hidden">
+      <div
+        data-testid="exercise-card"
+        data-status={se.status}
+        className={`card !p-0 overflow-hidden ${
+          se.status === 'hecho' ? '!border-emerald-500/60 !bg-emerald-500/10 dark:!bg-emerald-500/15' : ''
+        }`}
+      >
         <button onClick={onToggle} className="flex min-h-[4.5rem] w-full items-center gap-3 p-4 text-left">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
