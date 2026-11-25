@@ -1,0 +1,83 @@
+import 'fake-indexeddb/auto'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { db } from './db'
+import { ensureSeed } from './seed'
+import {
+  closeSession, duplicateTemplate, lastPerformance, saveImport, saveSet, startSession, substituteExercise, undoSet,
+} from './repo'
+import { buildImport } from '../domain/importer'
+
+beforeAll(async () => {
+  await ensureSeed(db, '2026-01-01')
+})
+
+describe('flujo de sesión (IndexedDB)', () => {
+  it('el seed solo se aplica una vez', async () => {
+    expect(await ensureSeed(db, '2026-01-01')).toBe(false)
+    expect(await db.templates.count()).toBe(3)
+  })
+
+  it('empieza la sesión A con todo precargado y accesorios anidados', async () => {
+    const id = await startSession('A', '2026-01-05')
+    const exs = await db.sessionExercises.where('sessionId').equals(id).sortBy('order')
+    expect(exs).toHaveLength(7)
+    const sent = exs[0]
+    expect(sent.plan.targets.map((t) => t.w)).toEqual([80, 100, 115, 115])
+    const gem = exs.find((e) => e.pairedWithId === sent.id)
+    expect(gem).toBeDefined()
+  })
+
+  it('registra series, deriva el estado, cierra y marca lo no hecho', async () => {
+    const id = await startSession('B', '2026-01-07')
+    const exs = await db.sessionExercises.where('sessionId').equals(id).sortBy('order')
+    const rdl = exs[0]
+    for (let i = 0; i < rdl.plan.sets; i++) await saveSet(rdl.id, i, { w: 85, reps: 8, rir: 2, done: true })
+    expect((await db.sessionExercises.get(rdl.id))!.status).toBe('hecho')
+    await undoSet(rdl.id, 2)
+    expect((await db.sessionExercises.get(rdl.id))!.status).toBe('parcial')
+    await closeSession(id)
+    const after = await db.sessionExercises.where('sessionId').equals(id).toArray()
+    expect(after.filter((e) => e.status === 'no_hecho').length).toBe(exs.length - 1)
+    expect((await db.sessions.get(id))!.status).toBe('cerrada')
+    const last = await lastPerformance(rdl.exerciseId)
+    expect(last?.date).toBe('2026-01-07')
+    expect(last?.sets).toHaveLength(2)
+  })
+
+  it('un sustituto es otro ejercicio y no hereda el historial del original', async () => {
+    const id = await startSession('A', '2026-01-12')
+    const exs = await db.sessionExercises.where('sessionId').equals(id).sortBy('order')
+    const curl = exs.find((e) => e.plan.targets.some((t) => t.l === 7.5))!
+    const original = curl.exerciseId
+    const sub = (await db.exercises.where('name').equals('Curl femoral con mancuernas').first())!
+    await substituteExercise(curl.id, sub.id)
+    const upd = (await db.sessionExercises.get(curl.id))!
+    expect(upd.exerciseId).toBe(sub.id)
+    expect(upd.substitutedForExerciseId).toBe(original)
+    expect(upd.status).toBe('sustituido')
+    await saveSet(curl.id, 0, { l: 8, r: 8, reps: 10, rir: 2, done: true })
+    await closeSession(id)
+    expect(await lastPerformance(sub.id)).not.toBeNull()
+  })
+
+  it('duplicar una plantilla crea una versión nueva y conserva el anidado', async () => {
+    const a = (await db.templates.where('code').equals('A').toArray()).find((t) => t.active)!
+    const newId = await duplicateTemplate(a.id, '2026-02-01')
+    const items = await db.templateItems.where('templateId').equals(newId).toArray()
+    expect(items).toHaveLength(7)
+    const paired = items.filter((i) => i.pairedWithItemId)
+    expect(paired.every((p) => items.some((i) => i.id === p.pairedWithItemId))).toBe(true)
+    expect((await db.templates.get(a.id))!.active).toBe(false)
+  })
+
+  it('importa un historial y no duplica peso corporal del mismo día', async () => {
+    const catalog = await db.exercises.toArray()
+    const raw = {
+      sesiones: [{ fecha: '2025-12-01', dia: 'C', ejercicios: [{ n: 'Hack squat', esq: '2×10', s: '60', fallo: false, obs: '' }] }],
+      peso_corporal: [{ fecha: '2025-12-01', kg: 79 }],
+    }
+    await saveImport(buildImport(raw, catalog))
+    await saveImport(buildImport(raw, await db.exercises.toArray()))
+    expect(await db.bodyWeights.where('date').equals('2025-12-01').count()).toBe(1)
+  })
+})

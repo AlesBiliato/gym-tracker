@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  body {
+    @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 17px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input, textarea, select { -webkit-user-select: text; user-select: text; }
+  /* iOS hace zoom en inputs con fuente < 16px */
+  input, textarea, select { font-size: 18px; }
+  button { touch-action: manipulation; }
+}
+
+@layer components {
+  .card { @apply rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800; }
+  .btn {
+    @apply inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl px-5 text-lg font-semibold
+      transition active:scale-[0.97] disabled:opacity-40;
+  }
+  .btn-primary { @apply bg-sky-500 text-white active:bg-sky-600; }
+  .btn-soft { @apply bg-slate-200 text-slate-900 active:bg-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:active:bg-slate-700; }
+  .btn-danger { @apply bg-red-500/15 text-red-600 dark:text-red-400; }
+  .btn-sm { @apply min-h-11 rounded-xl px-3 text-base; }
+  .input {
+    @apply min-h-14 w-full rounded-2xl bg-slate-100 px-4 text-lg ring-1 ring-slate-300 outline-none
+      focus:ring-2 focus:ring-sky-500 dark:bg-slate-800 dark:ring-slate-700;
+  }
+  .chip { @apply inline-flex min-h-11 items-center rounded-full bg-slate-200 px-4 text-base font-medium dark:bg-slate-800; }
+  .chip-on { @apply bg-sky-500 text-white dark:bg-sky-500; }
+  .label { @apply mb-1 block text-sm font-medium text-slate-500 dark:text-slate-400; }
+}

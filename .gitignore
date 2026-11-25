@@ -1,0 +1,9 @@
+node_modules
+dist
+dev-dist
+*.local
+.DS_Store
+# Datos personales: no subir al repositorio público
+/datos-privados/
+historial-gimnasio-*.json
+.claude/
