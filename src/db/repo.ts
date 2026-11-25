@@ -221,3 +221,16 @@ export async function exportAll() {
     exercises, templates, templateItems, sessions, sessionExercises, sets, matches, bodyWeights, settings,
   }
 }
+
+// ---- Peso corporal ----
+
+/** Una medida por día: si ya existe, se actualiza. */
+export async function saveBodyWeight(date: string, kg: number) {
+  const existing = (await db.bodyWeights.where('date').equals(date).toArray()).find((b) => !b.deletedAt)
+  if (existing) await db.bodyWeights.update(existing.id, { kg, updatedAt: now() })
+  else await db.bodyWeights.add({ ...newBase(), date, kg })
+}
+
+export async function deleteBodyWeight(id: string) {
+  await db.bodyWeights.update(id, { deletedAt: now(), updatedAt: now() })
+}

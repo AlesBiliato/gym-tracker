@@ -27,12 +27,12 @@ Registrar series en el móvil entre serie y serie suele ser lento y propenso a e
 | Fase | Contenido | Estado |
 |---|---|---|
 | 1 | Catálogo de ejercicios, plantillas A/B/C, registro en el gimnasio, importación de historial | ✅ |
-| 2 | Historial por ejercicio, gráficas (Recharts), volumen semanal por grupo muscular, peso corporal | ⏳ |
+| 2 | Historial por ejercicio, gráficas (Recharts), volumen semanal por grupo muscular, frecuencia y racha, peso corporal | ✅ |
 | 3 | Progresión doble automática (sugerencias siempre editables) | ⏳ |
 | 4 | Calendario de partidos, ajuste semanal y sesión de readaptación tras un parón | ⏳ |
 | 5 | Exportar JSON/CSV y resumen de las últimas semanas para pegar en un chat | ⏳ |
 
-Ya disponible (fase 1):
+Ya disponible (fases 1 y 2):
 
 - **Catálogo** por grupo muscular y tipo de carga, con ejercicios unilaterales, excluidos y alias.
 - **Plantillas versionables** con series, rango de repeticiones, peso objetivo *por serie*, descanso, RIR y notas; duplicables como nueva versión.
@@ -41,6 +41,10 @@ Ya disponible (fase 1):
 - **Variantes como ejercicios distintos:** si se cambia de máquina, se registra aparte y no se compara con el original.
 - **Resumen al cerrar** la sesión, resaltando los accesorios que se han quedado sin hacer.
 - **Temporizador de descanso** robusto ante iOS (ver abajo).
+- **Progreso por ejercicio:** mejor marca (por lado en unilaterales), peso máximo y volumen por sesión, e historial completo. Las variantes nunca se mezclan.
+- **Frecuencia y racha:** sesiones por semana (últimas 8) frente al objetivo, y semanas seguidas cumpliéndolo.
+- **Volumen semanal por grupo muscular** en series efectivas frente a un objetivo configurable, señalando qué grupo se queda corto.
+- **Peso corporal** con media móvil de 7 días sobre un eje de tiempo real (sin IMC ni "peso ideal").
 - **Importador de historial** en JSON con normalización de nombres al catálogo y extracción de repeticiones y RIR desde texto libre.
 
 ## Stack
@@ -64,6 +68,7 @@ Todas las entidades son *sync-ready* desde el primer día: `id` UUID generado en
 ### Decisiones de modelo que merece la pena destacar
 - Cada ejercicio de una sesión guarda una **copia del plan** vigente (series, rango, objetivos…). Editar una plantilla después **no altera el historial**.
 - Sustituir un ejercicio cambia `exerciseId` y conserva el original en `substitutedForExerciseId`; así las comparaciones y la progresión nunca mezclan variantes.
+- Las gráficas de línea usan un **eje de tiempo real**, no categórico: con medidas muy espaciadas, una escala por índice falsearía la tendencia. Las gráficas se cargan bajo demanda (*code splitting*) para no penalizar el arranque.
 - Los valores importados que no son reales (repeticiones previstas, no medidas) se marcan como `estimated`, para que la futura progresión automática no se fíe de ellos.
 - Qué sesión toca sigue la rotación A→B→C **sin acumular** sesiones perdidas.
 

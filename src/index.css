@@ -38,3 +38,19 @@
   .chip-on { @apply bg-sky-500 text-white dark:bg-sky-500; }
   .label { @apply mb-1 block text-sm font-medium text-slate-500 dark:text-slate-400; }
 }
+
+/* Gráficas: colores por rol (paleta de referencia validada). Claro por defecto, oscuro con .dark */
+:root {
+  --series-1: #2a78d6; /* azul: izquierda / serie principal */
+  --series-2: #eb6834; /* naranja: derecha */
+  --viz-grid: #e2e8f0;
+  --viz-axis: #64748b;
+  --viz-surface: #ffffff;
+}
+:root.dark {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --viz-grid: #1e293b;
+  --viz-axis: #94a3b8;
+  --viz-surface: #0f172a;
+}
