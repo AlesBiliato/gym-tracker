@@ -6,6 +6,7 @@ import { getSettings } from '../db/repo'
 import { formatDate } from '../domain/format'
 import ExerciseCard from '../components/ExerciseCard'
 import { PageHeader } from '../components/ui'
+import { useRestTimer } from '../components/RestTimer'
 
 export default function SessionPage() {
   const { id = '' } = useParams()
@@ -19,6 +20,9 @@ export default function SessionPage() {
   const exercises = useLiveQuery(() => db.exercises.toArray(), [])
   const settings = useLiveQuery(() => getSettings(), [])
   const [openId, setOpenId] = useState<string | null | undefined>(undefined)
+  const timer = useRestTimer()
+  /** Tarjeta de la última serie marcada con ✓: se queda abierta durante su descanso para poder corregir reps/RIR. */
+  const [held, setHeld] = useState<{ id: string; token: number } | null>(null)
 
   // Pantalla siempre encendida durante la sesión (si el navegador lo permite).
   useEffect(() => {
@@ -44,7 +48,8 @@ export default function SessionPage() {
   const mains = exs.filter((e) => !e.pairedWithId)
   // Abre por defecto el primer principal sin terminar.
   const defaultOpen = mains.find((m) => m.status !== 'no_hecho' && !isDone(m.id, m.plan.sets))?.id ?? null
-  const currentOpen = openId === undefined ? defaultOpen : openId
+  const holdActive = held != null && timer.token === held.token
+  const currentOpen = openId !== undefined ? openId : holdActive ? held.id : defaultOpen
   const readOnly = session.status === 'cerrada'
   const totalDone = allSets.filter((s) => s.done).length
   const totalSets = exs.reduce((n, e) => n + (e.status === 'no_hecho' ? 0 : e.plan.sets), 0)
@@ -67,12 +72,14 @@ export default function SessionPage() {
               key={m.id} se={m} ex={exOf(m.exerciseId)} allExercises={exercises} nameOf={nameOf}
               sets={setsOf(m.id)} settings={settings} readOnly={readOnly}
               open={currentOpen === m.id} onToggle={() => setOpenId(currentOpen === m.id ? null : m.id)}
+              onLogged={(token) => setHeld({ id: m.id, token })}
             >
               {children.map((c) => (
                 <ExerciseCard
                   key={c.id} se={c} ex={exOf(c.exerciseId)} allExercises={exercises} nameOf={nameOf}
                   sets={setsOf(c.id)} settings={settings} readOnly={readOnly} nested
                   open={currentOpen === c.id} onToggle={() => setOpenId(currentOpen === c.id ? null : c.id)}
+                  onLogged={(token) => setHeld({ id: c.id, token })}
                 />
               ))}
             </ExerciseCard>

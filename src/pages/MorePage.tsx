@@ -117,17 +117,17 @@ export default function MorePage() {
 
         <div className="card space-y-3">
           <p className="font-bold">Importar historial</p>
-          <p className="text-sm text-slate-500">Archivo <code>historial-gimnasio-alessandro.json</code>. Los nombres se normalizan al catálogo; los que no coinciden se crean como ejercicios nuevos.</p>
+          <p className="text-sm text-slate-500">Archivo <code>.json</code> con tus sesiones y tu peso corporal. Los nombres se normalizan al catálogo; los que no coinciden se crean como ejercicios nuevos.</p>
           <label className="btn btn-primary w-full">
             Elegir archivo…
             <input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }} />
           </label>
           {preview && (
             <div className="space-y-2 rounded-2xl bg-slate-100 p-3 dark:bg-slate-800">
-              <p className="font-semibold">{preview.stats.sessions} sesiones · {preview.stats.exercises} ejercicios ({preview.stats.matched} reconocidos, {preview.stats.created} nuevos) · {preview.bodyWeights.length} pesos</p>
+              <p className="font-semibold">{preview.stats.sessions} sesiones · {preview.stats.exercises} ejercicios ({preview.stats.matched} reconocidos, {preview.stats.created} {preview.stats.created === 1 ? 'nuevo' : 'nuevos'}) · {preview.bodyWeights.length} pesos</p>
               <p className="text-sm">Con repeticiones/RIR reales extraídos: {preview.stats.withReps}</p>
               {preview.warnings.length > 0 && (
-                <details className="text-sm"><summary className="font-semibold">{preview.warnings.length} avisos</summary>
+                <details className="text-sm"><summary className="font-semibold">{preview.warnings.length} {preview.warnings.length === 1 ? 'aviso' : 'avisos'}</summary>
                   <ul className="mt-1 list-disc pl-5">{preview.warnings.slice(0, 40).map((w, i) => <li key={i}>{w}</li>)}</ul></details>
               )}
               <div className="grid grid-cols-2 gap-2">

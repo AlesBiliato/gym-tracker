@@ -144,6 +144,10 @@ export async function substituteExercise(seId: string, newExerciseId: string) {
     exerciseId: newExerciseId,
     substitutedForExerciseId: se.substitutedForExerciseId ?? se.exerciseId,
     status: 'sustituido',
+    // Las cargas del original (p. ej. 40 kg bilateral) no valen para el sustituto (p. ej. unilateral):
+    // se parte de lo que hiciste la última vez con ÉL.
+    plan: { ...se.plan, targets: [] },
+    suggestion: undefined,
     updatedAt: now(),
   })
 }

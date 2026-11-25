@@ -167,6 +167,7 @@ describe('estado del ejercicio: En curso vs Parcial', () => {
     expect(statusOnClose('pendiente', 0, 3)).toBe('no_hecho')
     expect(statusOnClose('no_hecho', 0, 3)).toBe('no_hecho')
     expect(statusOnClose('sustituido', 2, 3)).toBe('sustituido')
+    expect(statusOnClose('sustituido', 0, 3)).toBe('no_hecho') // sustituido pero sin ninguna serie
   })
 })
 
@@ -214,5 +215,14 @@ describe('serie rápida (✓)', () => {
   })
   it('botones de RIR: 0, 1, 2, 3 y 4+', () => {
     expect([...RIR_OPTIONS]).toEqual([0, 1, 2, 3, 4])
+  })
+})
+
+describe('resumen: ejercicios sustituidos', () => {
+  it('un sustituido sin series cuenta como sin hacer; con series, como hecho', () => {
+    const mk = (id: string, status: 'sustituido' | 'hecho', paired: string | null) => ({ id, exerciseId: id, status, pairedWithId: paired }) as never
+    const r = summarize([mk('a', 'sustituido', null), mk('b', 'sustituido', null), mk('c', 'hecho', null)], { a: 0, b: 2, c: 3 }, () => false)
+    expect(r.notDone.map((e) => e.id)).toEqual(['a'])
+    expect(r.done.map((e) => e.id)).toEqual(['b', 'c'])
   })
 })

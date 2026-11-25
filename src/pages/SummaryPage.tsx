@@ -5,10 +5,12 @@ import { closeSession, deleteSession, setSessionNotes } from '../db/repo'
 import { formatDate } from '../domain/format'
 import { summarize } from '../domain/sessionPlan'
 import { PageHeader } from '../components/ui'
+import { useRestTimer } from '../components/RestTimer'
 
 export default function SummaryPage() {
   const { id = '' } = useParams()
   const nav = useNavigate()
+  const timer = useRestTimer()
   const session = useLiveQuery(() => db.sessions.get(id), [id])
   const exs = useLiveQuery(() => db.sessionExercises.where('sessionId').equals(id).sortBy('order'), [id])
   const sets = useLiveQuery(async () => {
@@ -70,9 +72,9 @@ export default function SummaryPage() {
 
         {!readOnly ? (
           <div className="grid gap-2">
-            <button className="btn btn-primary text-xl" onClick={async () => { await closeSession(id); nav('/') }}>Cerrar y guardar sesión</button>
+            <button className="btn btn-primary text-xl" onClick={async () => { await closeSession(id); timer.stop(); nav('/') }}>Cerrar y guardar sesión</button>
             <Link to={`/sesion/${id}`} className="btn btn-soft">Volver a la sesión</Link>
-            <button className="btn btn-danger" onClick={async () => { if (confirm('¿Descartar esta sesión y todo lo registrado?')) { await deleteSession(id); nav('/') } }}>Descartar sesión</button>
+            <button className="btn btn-danger" onClick={async () => { if (confirm('¿Descartar esta sesión y todo lo registrado?')) { await deleteSession(id); timer.stop(); nav('/') } }}>Descartar sesión</button>
           </div>
         ) : (
           <Link to="/progreso" className="btn btn-soft w-full">Volver al historial</Link>

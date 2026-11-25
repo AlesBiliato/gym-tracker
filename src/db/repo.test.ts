@@ -56,6 +56,8 @@ describe('flujo de sesión (IndexedDB)', () => {
     expect(upd.exerciseId).toBe(sub.id)
     expect(upd.substitutedForExerciseId).toBe(original)
     expect(upd.status).toBe('sustituido')
+    expect(upd.plan.targets).toEqual([]) // no hereda las cargas del original
+    expect(upd.suggestion).toBeUndefined()
     await saveSet(curl.id, 0, { l: 8, r: 8, reps: 10, rir: 2, done: true })
     await closeSession(id)
     expect(await lastPerformance(sub.id)).not.toBeNull()

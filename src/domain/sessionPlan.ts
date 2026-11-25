@@ -58,7 +58,7 @@ export function summarize(
   setsDoneBy: Record<string, number>,
   isAccessory: (exerciseId: string) => boolean,
 ): SessionSummary {
-  const notDone = exs.filter((e) => e.status === 'no_hecho' || (e.status === 'pendiente' && !(setsDoneBy[e.id] > 0)))
+  const notDone = exs.filter((e) => e.status === 'no_hecho' || ((e.status === 'pendiente' || e.status === 'sustituido') && !(setsDoneBy[e.id] > 0)))
   return {
     done: exs.filter((e) => !notDone.includes(e)),
     notDone,
@@ -84,6 +84,7 @@ export function deriveStatus(
 
 /** Al cerrar la sesión: sin series -> no hecho; con series sin completar -> parcial. */
 export function statusOnClose(current: ExerciseStatus, doneSets: number, plannedSets: number): ExerciseStatus {
+  if (current === 'sustituido' && doneSets === 0) return 'no_hecho'
   if (current === 'pendiente' || current === 'en_curso') {
     if (doneSets === 0) return 'no_hecho'
     return doneSets < plannedSets ? 'parcial' : 'hecho'

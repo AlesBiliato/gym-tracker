@@ -5,7 +5,7 @@ import {
   applySuggestion, lastPerformance, revertSuggestion, saveSet, setExerciseStatus, setObs, setPlanSets, substituteExercise, undoSet,
 } from '../db/repo'
 import { formatDate, formatKg, formatRest } from '../domain/format'
-import { quickSet, repsLabel, repsOptions, RIR_OPTIONS, targetForSet } from '../domain/sessionPlan'
+import { quickSet, repsLabel, repsOptions, RIR_OPTIONS } from '../domain/sessionPlan'
 import { Sheet } from './ui'
 import SetEditor, { type SetValues } from './SetEditor'
 import { useRestTimer } from './RestTimer'
@@ -23,17 +23,20 @@ const STATUS_STYLE: Record<string, string> = {
 }
 
 function fmtSet(s: Partial<SetLog>, uni: boolean, bodyweight: boolean) {
-  const load = bodyweight ? '' : uni ? `${formatKg(s.l)}/${formatKg(s.r)} kg` : `${formatKg(s.w)} kg`
-  const reps = s.repsL != null || s.repsR != null ? `${s.repsL ?? '–'}/${s.repsR ?? '–'}` : `${s.reps ?? '–'}`
+  // Sin carga registrada (peso corporal o series sin peso) no se muestra "–/– kg".
+  const hasLoad = !bodyweight && (uni ? s.l != null || s.r != null : s.w != null)
+  const load = !hasLoad ? '' : uni ? `${formatKg(s.l)}/${formatKg(s.r)} kg` : `${formatKg(s.w)} kg`
+  // "~": repeticiones previstas que se importaron sin medir.
+  const reps = s.repsL != null || s.repsR != null ? `${s.repsL ?? '–'}/${s.repsR ?? '–'}` : s.reps == null ? '–' : `${s.estimated ? '~' : ''}${s.reps}`
   return `${load}${load ? ' × ' : ''}${reps}`
 }
 
 export default function ExerciseCard({
-  se, ex, allExercises, nameOf, sets, open, onToggle, nested, settings, readOnly, children,
+  se, ex, allExercises, nameOf, sets, open, onToggle, nested, settings, readOnly, onLogged, children,
 }: {
   se: SessionExercise; ex: Exercise; allExercises: Exercise[]; nameOf: (id: string) => string
   sets: SetLog[]; open: boolean; onToggle: () => void; nested?: boolean
-  settings: Settings; readOnly?: boolean; children?: ReactNode
+  settings: Settings; readOnly?: boolean; onLogged?: (token: number) => void; children?: ReactNode
 }) {
   const timer = useRestTimer()
   const last = useLiveQuery(() => lastPerformance(se.exerciseId, se.sessionId), [se.exerciseId, se.sessionId])
@@ -53,10 +56,11 @@ export default function ExerciseCard({
   const quick = (i: number): SetValues => quickSet(plan, i, last?.sets, ex.unilateral)
 
   const targetLabel = (i: number) => {
-    const t = targetForSet(plan, i)
+    // Lo que guardaría el ✓: la carga del plan o, si falta (p. ej. tras sustituir), la de la última vez.
+    const q = quick(i)
     const load = bodyweight ? '' : ex.unilateral
-      ? (t.l == null && t.r == null ? '' : `${formatKg(t.l)}/${formatKg(t.r)} kg`)
-      : (t.w == null ? '' : `${formatKg(t.w)} kg`)
+      ? (q.l == null && q.r == null ? '' : `${formatKg(q.l)}/${formatKg(q.r)} kg`)
+      : (q.w == null ? '' : `${formatKg(q.w)} kg`)
     return `${load ? load + ' ' : ''}× ${repsLabel(plan)}`
   }
 
@@ -72,6 +76,7 @@ export default function ExerciseCard({
     } else {
       const token = await commit(i, quick(i))
       setCorr({ index: i, token })
+      onLogged?.(token)
     }
   }
 
