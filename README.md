@@ -3,6 +3,8 @@
 **PWA móvil, offline-first, para registrar y planificar entrenamientos de musculación.**
 Pensada para usarse con una mano, en el gimnasio y con mala cobertura: cada toque se guarda al instante en el dispositivo y la app funciona sin conexión.
 
+**Demo:** https://gym-tracker-sooty-three.vercel.app (ábrela en el móvil y añádela a la pantalla de inicio)
+
 > Interfaz en español de España · pesos en kg con coma decimal (`62,5`) · fechas `dd/mm/aa` · modo claro y oscuro.
 
 <p align="center">

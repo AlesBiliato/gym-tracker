@@ -8,3 +8,6 @@ dev-dist
 historial-gimnasio-*.json
 .claude/
 /data/
+
+.vercel
+.env*
