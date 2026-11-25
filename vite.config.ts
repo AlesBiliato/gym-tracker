@@ -2,13 +2,29 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
+const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
+// En Vercel el commit llega por variable de entorno; en local se pregunta a git.
+const commit =
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ??
+  (() => {
+    try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' }
+  })()
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_COMMIT__: JSON.stringify(commit),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': la versión nueva espera a que el usuario pulse «Actualizar» (no recarga a mitad de sesión).
+      registerType: 'prompt',
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {
         name: 'Gym Tracker',

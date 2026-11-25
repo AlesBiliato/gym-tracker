@@ -8,6 +8,7 @@ import CatalogPage from './pages/CatalogPage'
 import ProgressPage from './pages/ProgressPage'
 import WeekPage from './pages/WeekPage'
 import MorePage from './pages/MorePage'
+import UpdateBanner from './components/UpdateBanner'
 
 const TABS = [
   { to: '/', label: 'Hoy', icon: '🏋️', end: true },
@@ -20,6 +21,7 @@ const TABS = [
 export default function App() {
   return (
     <div className="mx-auto min-h-dvh max-w-md pb-[calc(9rem+env(safe-area-inset-bottom))]">
+      <UpdateBanner />
       <Routes>
         <Route path="/" element={<TodayPage />} />
         <Route path="/sesion/:id" element={<SessionPage />} />

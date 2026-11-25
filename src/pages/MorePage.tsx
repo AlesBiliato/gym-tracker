@@ -3,7 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { exportAll, getSettings, saveImport, saveSettings } from '../db/repo'
 import { buildImport, type ImportResult, type RawHistory } from '../domain/importer'
-import { todayISO } from '../domain/format'
+import { formatDateTime, todayISO } from '../domain/format'
+import { checkForUpdate } from '../update'
 import { PageHeader } from '../components/ui'
 
 function applyTheme(t: 'auto' | 'claro' | 'oscuro') {
@@ -11,6 +12,27 @@ function applyTheme(t: 'auto' | 'claro' | 'oscuro') {
   try { localStorage.setItem('theme', key) } catch { /* ignore */ }
   const dark = key === 'dark' || (key === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.classList.toggle('dark', dark)
+}
+
+function VersionCard() {
+  const [state, setState] = useState<'idle' | 'checking' | 'latest' | 'new'>('idle')
+  const check = async () => {
+    setState('checking')
+    setState((await checkForUpdate()) ? 'new' : 'latest')
+  }
+  return (
+    <div className="card space-y-2">
+      <p className="font-bold">Versión</p>
+      <p className="text-sm text-slate-500">
+        {__APP_VERSION__} <span className="tabular-nums">({__APP_COMMIT__})</span> · desplegada el {formatDateTime(__BUILD_DATE__)}
+      </p>
+      <button className="btn btn-soft btn-sm w-full" onClick={check} disabled={state === 'checking'}>
+        {state === 'checking' ? 'Buscando…' : 'Buscar actualizaciones'}
+      </button>
+      {state === 'latest' && <p className="text-sm text-emerald-600 dark:text-emerald-400">Tienes la última versión.</p>}
+      {state === 'new' && <p className="text-sm text-sky-600 dark:text-sky-400">Hay una versión nueva: pulsa «Actualizar» en el aviso de arriba.</p>}
+    </div>
+  )
 }
 
 export default function MorePage() {
@@ -94,6 +116,8 @@ export default function MorePage() {
           <p className="text-sm text-slate-500">Tus datos viven solo en este móvil. Descarga una copia de vez en cuando. (Exportación completa y resumen para Claude: fase 5.)</p>
           <button className="btn btn-soft w-full" onClick={download}>Descargar copia (JSON)</button>
         </div>
+
+        <VersionCard />
 
         {counts && <p className="text-center text-sm text-slate-500">{counts.ejercicios} ejercicios · {counts.sesiones} sesiones · {counts.series} series · {counts.peso} pesos</p>}
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatKg, parseNumber, daysBetween, formatClock } from './format'
+import { formatDate, formatDateTime, formatKg, parseNumber, daysBetween, formatClock } from './format'
 import {
   buildImport, matchExercise, parseDate, parseObs, parseScheme, parseWeights, templateCodeFrom,
 } from './importer'
@@ -23,6 +23,8 @@ describe('formato es-ES', () => {
     expect(formatDate('2026-11-25')).toBe('25/11/26')
     expect(daysBetween('2026-11-01', '2026-11-25')).toBe(24)
     expect(formatClock(125)).toBe('2:05')
+    expect(formatDateTime(new Date(2026, 10, 25, 9, 5).toISOString())).toBe('25/11/26 09:05')
+    expect(formatDateTime('no-es-fecha')).toBe('no-es-fecha')
   })
 })
 
