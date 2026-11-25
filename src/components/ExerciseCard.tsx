@@ -32,11 +32,11 @@ function fmtSet(s: Partial<SetLog>, uni: boolean, bodyweight: boolean) {
 }
 
 export default function ExerciseCard({
-  se, ex, allExercises, nameOf, sets, open, onToggle, nested, settings, readOnly, onLogged, children,
+  se, ex, allExercises, nameOf, sets, open, onToggle, nested, settings, readOnly, children,
 }: {
   se: SessionExercise; ex: Exercise; allExercises: Exercise[]; nameOf: (id: string) => string
   sets: SetLog[]; open: boolean; onToggle: () => void; nested?: boolean
-  settings: Settings; readOnly?: boolean; onLogged?: (token: number) => void; children?: ReactNode
+  settings: Settings; readOnly?: boolean; children?: ReactNode
 }) {
   const timer = useRestTimer()
   const last = useLiveQuery(() => lastPerformance(se.exerciseId, se.sessionId), [se.exerciseId, se.sessionId])
@@ -76,7 +76,6 @@ export default function ExerciseCard({
     } else {
       const token = await commit(i, quick(i))
       setCorr({ index: i, token })
-      onLogged?.(token)
     }
   }
 
