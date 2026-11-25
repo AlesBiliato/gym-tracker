@@ -123,6 +123,17 @@ export function parseObs(obs: string | undefined): { pairs: { w: number; reps: n
   return out
 }
 
+/**
+ * Cargas planificadas escritas en la observación: "Plan: 70/90/100/100" o "Plan: 70/80/85; subió a 90…".
+ * Solo tiene sentido en ejercicios bilaterales (en unilaterales "A/B" son los dos lados).
+ */
+export function parsePlanLoads(obs: string | undefined): number[] | null {
+  const m = /plan:\s*(\d+(?:[.,]\d{1,2})?(?:\s*\/\s*\d+(?:[.,]\d{1,2})?)*)/i.exec(obs ?? '')
+  if (!m) return null
+  const nums = (m[1].match(NUM) ?? []).map(toNum)
+  return nums.length ? nums : null
+}
+
 export function matchExercise(name: string, catalog: Exercise[]): Exercise | null {
   const n = norm(name)
   for (const e of catalog) if (norm(e.name) === n) return e
@@ -218,8 +229,12 @@ export function buildImport(raw: RawHistory, catalog: Exercise[]): ImportResult 
       }
 
       const obsInfo = parseObs(obs)
+      // Si la observación dice qué tocaba ("Plan: 70/90/100/100"), se guarda como plan: así se puede
+      // detectar que se hizo más peso del planificado.
+      const plannedLoads = ex.unilateral ? null : parsePlanLoads(obs)
       const plan: PlanSnapshot = {
-        sets: targets.length, repMin: scheme?.repMin ?? 0, repMax: scheme?.repMax ?? 0, targets,
+        sets: plannedLoads?.length ?? targets.length, repMin: scheme?.repMin ?? 0, repMax: scheme?.repMax ?? 0,
+        targets: plannedLoads ? plannedLoads.map((x) => ({ w: x })) : targets,
         restSecMin: 90, restSecMax: 120, targetRir: 2, notes: '', perSide: !!scheme?.perSide,
       }
       const se: SessionExercise = {

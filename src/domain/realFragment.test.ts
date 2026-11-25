@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildImport, type RawHistory } from './importer'
-import { buildSeed } from '../db/seed'
+import { buildImport, parsePlanLoads, type RawHistory } from './importer'
+import { suggestProgression } from './progression'
+import { buildSeed, DEFAULT_SETTINGS } from '../db/seed'
 
 /**
  * Fragmento de historial-gimnasio-alessandro.json: entradas reales, recortadas y
@@ -98,5 +99,36 @@ describe('importador con fragmento real', () => {
   })
   it('peso corporal conserva el origen', () => {
     expect(r.bodyWeights[0]).toMatchObject({ date: '2026-11-04', kg: 80.5, note: 'Báscula' })
+  })
+})
+
+describe('de la importación a la sugerencia (ejemplo real de la sentadilla)', () => {
+  const seed = buildSeed('2026-01-01')
+  const r = buildImport(FRAGMENT, seed.exercises)
+  const sq = seed.exercises.find((e) => e.name === 'Sentadilla')!
+  const se = r.sessionExercises.find((e) => e.exerciseId === sq.id && r.sessions.find((s) => s.id === e.sessionId)!.date === '2026-11-23')!
+  const lastSets = r.sets.filter((s) => s.sessionExerciseId === se.id)
+
+  it('lee "Plan: 70/90/100/100" de la observación como plan', () => {
+    expect(parsePlanLoads('Plan: 70/90/100/100. 120×6 con 1-2 repeticiones en reserva.')).toEqual([70, 90, 100, 100])
+    expect(parsePlanLoads('Plan: 70/80/85; subió a 90 en las dos últimas.')).toEqual([70, 80, 85])
+    expect(parsePlanLoads('Sin plan escrito')).toBeNull()
+    expect(se.plan.targets.map((t) => t.w)).toEqual([70, 90, 100, 100])
+    expect(lastSets.map((s) => s.w)).toEqual([80, 100, 110, 120])
+  })
+  it('solo la serie 120×6 (RIR 1) está medida; el resto son repeticiones estimadas', () => {
+    expect(lastSets.map((s) => !s.estimated)).toEqual([false, false, false, true])
+  })
+  it('sugiere 80/100/115/115 y avisa, sin subir más allá', () => {
+    const tplItem = seed.templateItems.find((i) => i.exerciseId === sq.id && i.templateId === seed.templates[0].id)!
+    const s = suggestProgression({
+      exercise: sq,
+      settings: { incrementsKg: DEFAULT_SETTINGS.incrementsKg, minRirToProgress: 2, barbellBigStepKg: 5 },
+      current: tplItem,
+      last: { date: '2026-11-23', plan: se.plan, sets: lastSets },
+    })
+    expect(s.kind).toBe('consolidar')
+    expect(s.targets.map((t) => t.w)).toEqual([80, 100, 115, 115])
+    expect(s.warnings[0]).toMatch(/serie 4: 120 kg \(plan 100\)/)
   })
 })

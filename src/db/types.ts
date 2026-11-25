@@ -103,6 +103,19 @@ export interface SessionExercise extends Base {
   plan: PlanSnapshot
   /** Texto original del importador, por trazabilidad. */
   importRaw?: string
+  /** Sugerencia de carga calculada al empezar la sesión (siempre editable; nunca impuesta). */
+  suggestion?: StoredSuggestion
+}
+
+export interface StoredSuggestion {
+  kind: 'subir' | 'mantener' | 'consolidar'
+  targets: SetTarget[]
+  /** Objetivos que había antes de aplicarla, para poder deshacer. */
+  previousTargets: SetTarget[]
+  reason: string
+  warnings: string[]
+  basisDate: string | null
+  applied: boolean
 }
 
 export interface SetLog extends Base {
@@ -142,6 +155,10 @@ export interface Settings extends Base {
   theme: 'auto' | 'claro' | 'oscuro'
   incrementsKg: Record<LoadType, number>
   targetSetsPerGroup: number
+  /** Progresión: RIR mínimo en todas las series para subir (2). */
+  minRirToProgress: number
+  /** Progresión: salto de barra cuando fue claramente fácil (RIR medio ≥ 3). */
+  barbellBigStepKg: number
   readaptationAfterDays: number
   readaptationPct: number
   volleyDays: number[] // 0 domingo ... 6 sábado

@@ -62,6 +62,8 @@ export const DEFAULT_SETTINGS = {
   theme: 'auto' as const,
   incrementsKg: { barra: 2.5, mancuernas: 2, máquina: 2.5, polea: 2.5, 'peso corporal': 0 } as Record<LoadType, number>,
   targetSetsPerGroup: 10,
+  minRirToProgress: 2,
+  barbellBigStepKg: 5,
   readaptationAfterDays: 10,
   readaptationPct: 0.875,
   volleyDays: [1, 2, 4],

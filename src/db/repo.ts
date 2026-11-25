@@ -2,6 +2,7 @@ import { db } from './db'
 import { newBase, now } from './base'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveStatus, orderItems, planFromItem, statusOnClose } from '../domain/sessionPlan'
+import { suggestProgression, type Suggestion } from '../domain/progression'
 import type { ImportResult } from '../domain/importer'
 import type {
   Exercise, ExerciseStatus, PlanSnapshot, Session, SessionExercise, SetLog, Settings, Template, TemplateItem,
@@ -24,7 +25,8 @@ export async function activeTemplate(code: 'A' | 'B' | 'C'): Promise<Template | 
 }
 
 /** Crea la sesión de hoy con todo precargado desde la plantilla activa. */
-export async function startSession(code: 'A' | 'B' | 'C', date: string): Promise<string> {
+/** `applyItemIds`: ids de TemplateItem cuya sugerencia se aplica ya. El resto queda disponible para aplicar desde el ejercicio. */
+export async function startSession(code: 'A' | 'B' | 'C', date: string, applyItemIds: string[] = []): Promise<string> {
   const tpl = await activeTemplate(code)
   if (!tpl) throw new Error(`No hay plantilla ${code}`)
   const items = orderItems((await db.templateItems.where('templateId').equals(tpl.id).toArray()).filter((i) => !i.deletedAt))
@@ -32,11 +34,22 @@ export async function startSession(code: 'A' | 'B' | 'C', date: string): Promise
     ...newBase(), date, templateId: tpl.id, templateCode: code, mode: 'normal', status: 'en_curso',
     notes: '', startedAt: now(),
   }
+  const suggestions = new Map((await computeSuggestions(code)).map((x) => [x.item.id, x.suggestion]))
+  const apply = new Set(applyItemIds)
   const idByItem = new Map<string, string>()
   const exs: SessionExercise[] = items.map((it, order) => {
     const se: SessionExercise = {
       ...newBase(), sessionId: session.id, exerciseId: it.exerciseId, templateItemId: it.id, order,
       pairedWithId: null, status: 'pendiente', obs: '', plan: planFromItem(it),
+    }
+    const sug = suggestions.get(it.id)
+    if (sug && sug.kind !== 'sin_datos') {
+      const applied = apply.has(it.id) && sug.changes
+      se.suggestion = {
+        kind: sug.kind, targets: sug.targets, previousTargets: se.plan.targets.map((t) => ({ ...t })),
+        reason: sug.reason, warnings: sug.warnings, basisDate: sug.basisDate, applied,
+      }
+      if (applied) se.plan = { ...se.plan, targets: sug.targets.map((t) => ({ ...t })) }
     }
     idByItem.set(it.id, se.id)
     return se
@@ -55,16 +68,25 @@ export interface LastPerformance {
   date: string
   sets: SetLog[]
   obs: string
+  /** Plan vigente cuando se hizo (cargas y rango previstos). */
+  plan: PlanSnapshot
 }
 
-/** Lo que hice la última vez en ese ejercicio (solo ese ejercicio: las variantes no se comparan). */
-export async function lastPerformance(exerciseId: string, excludeSessionId?: string): Promise<LastPerformance | null> {
+/**
+ * Lo que hice la última vez en ese ejercicio (solo ese ejercicio: las variantes no se comparan).
+ * Con `templateCode`, solo cuenta sesiones de ese tipo (A/B/C): el press banca de la A y el de la C
+ * tienen cargas y rangos distintos y no deben mezclarse al sugerir.
+ */
+export async function lastPerformance(
+  exerciseId: string, excludeSessionId?: string, templateCode?: 'A' | 'B' | 'C',
+): Promise<LastPerformance | null> {
   const ses = await db.sessionExercises.where('exerciseId').equals(exerciseId).toArray()
   let best: { se: SessionExercise; date: string } | null = null
   for (const se of ses) {
     if (se.sessionId === excludeSessionId || se.deletedAt || se.status === 'no_hecho') continue
     const s = await db.sessions.get(se.sessionId)
     if (!s || s.status !== 'cerrada' || s.deletedAt) continue
+    if (templateCode && s.templateCode !== templateCode) continue
     if (!best || s.date > best.date) best = { se, date: s.date }
   }
   if (!best) return null
@@ -72,7 +94,7 @@ export async function lastPerformance(exerciseId: string, excludeSessionId?: str
     .filter((s) => s.done && !s.deletedAt)
     .sort((a, b) => a.index - b.index)
   if (!sets.length) return null
-  return { date: best.date, sets, obs: best.se.obs }
+  return { date: best.date, sets, obs: best.se.obs, plan: best.se.plan }
 }
 
 export async function saveSet(seId: string, index: number, patch: Partial<SetLog>): Promise<void> {
@@ -233,4 +255,53 @@ export async function saveBodyWeight(date: string, kg: number) {
 
 export async function deleteBodyWeight(id: string) {
   await db.bodyWeights.update(id, { deletedAt: now(), updatedAt: now() })
+}
+
+// ---- Progresión: sugerencias de carga ----
+
+export interface ItemSuggestion {
+  item: TemplateItem
+  exercise: Exercise
+  suggestion: Suggestion
+}
+
+/** Sugerencias para la próxima sesión de esa plantilla (una por ejercicio, según su última vez). */
+export async function computeSuggestions(code: 'A' | 'B' | 'C'): Promise<ItemSuggestion[]> {
+  const tpl = await activeTemplate(code)
+  if (!tpl) return []
+  const items = orderItems((await db.templateItems.where('templateId').equals(tpl.id).toArray()).filter((i) => !i.deletedAt))
+  const settings = await getSettings()
+  const out: ItemSuggestion[] = []
+  for (const item of items) {
+    const exercise = await db.exercises.get(item.exerciseId)
+    if (!exercise || exercise.excluded) continue
+    const last = await lastPerformance(item.exerciseId, undefined, code) // mismo tipo de sesión
+    const suggestion = suggestProgression({
+      exercise, settings, current: item,
+      last: last ? { date: last.date, plan: last.plan, sets: last.sets } : null,
+    })
+    out.push({ item, exercise, suggestion })
+  }
+  return out
+}
+
+/** Aplica la sugerencia al plan de ESTA sesión (no toca la plantilla ni las series ya registradas). */
+export async function applySuggestion(seId: string) {
+  const se = await db.sessionExercises.get(seId)
+  if (!se?.suggestion) return
+  await db.sessionExercises.update(seId, {
+    plan: { ...se.plan, targets: se.suggestion.targets.map((t) => ({ ...t })) },
+    suggestion: { ...se.suggestion, applied: true },
+    updatedAt: now(),
+  })
+}
+
+export async function revertSuggestion(seId: string) {
+  const se = await db.sessionExercises.get(seId)
+  if (!se?.suggestion) return
+  await db.sessionExercises.update(seId, {
+    plan: { ...se.plan, targets: se.suggestion.previousTargets.map((t) => ({ ...t })) },
+    suggestion: { ...se.suggestion, applied: false },
+    updatedAt: now(),
+  })
 }

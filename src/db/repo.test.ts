@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { db } from './db'
 import { ensureSeed } from './seed'
 import {
-  closeSession, duplicateTemplate, lastPerformance, saveImport, saveSet, startSession, substituteExercise, undoSet,
+  applySuggestion, closeSession, computeSuggestions, duplicateTemplate, lastPerformance, saveImport, saveSet, revertSuggestion, startSession, substituteExercise, undoSet,
 } from './repo'
 import { buildImport } from '../domain/importer'
 
@@ -80,5 +80,66 @@ describe('flujo de sesión (IndexedDB)', () => {
     await saveImport(buildImport(raw, catalog))
     await saveImport(buildImport(raw, await db.exercises.toArray()))
     expect(await db.bodyWeights.where('date').equals('2025-12-01').count()).toBe(1)
+  })
+})
+
+describe('progresión (IndexedDB)', () => {
+  it('sugiere subir tras una sesión completa y medida, y se aplica/deshace sin imponerse', async () => {
+    const id = await startSession('A', '2026-02-02')
+    const exs = await db.sessionExercises.where('sessionId').equals(id).sortBy('order')
+    const bench = exs.find((e) => e.plan.targets.length === 3 && e.plan.targets[0].w === 62.5)!
+    for (let i = 0; i < 3; i++) await saveSet(bench.id, i, { w: 62.5, reps: 6, rir: 2, done: true })
+    await closeSession(id)
+
+    const sug = (await computeSuggestions('A')).find((x) => x.exercise.id === bench.exerciseId)!
+    expect(sug.suggestion.kind).toBe('subir')
+    expect(sug.suggestion.targets.map((t) => t.w)).toEqual([65, 65, 65])
+    // lo que no se hizo no genera sugerencia
+    expect((await computeSuggestions('A')).find((x) => x.exercise.name === 'Jalón en máquina')!.suggestion.kind).toBe('sin_datos')
+
+    // Sin aplicar: el plan de la sesión sigue siendo el de la plantilla, y la sugerencia queda disponible.
+    const s1 = await startSession('A', '2026-02-09')
+    const se1 = (await db.sessionExercises.where('sessionId').equals(s1).toArray()).find((e) => e.exerciseId === bench.exerciseId)!
+    expect(se1.plan.targets.map((t) => t.w)).toEqual([62.5, 62.5, 62.5])
+    expect(se1.suggestion).toMatchObject({ kind: 'subir', applied: false })
+
+    await applySuggestion(se1.id)
+    expect((await db.sessionExercises.get(se1.id))!.plan.targets.map((t) => t.w)).toEqual([65, 65, 65])
+    await revertSuggestion(se1.id)
+    expect((await db.sessionExercises.get(se1.id))!.plan.targets.map((t) => t.w)).toEqual([62.5, 62.5, 62.5])
+    expect((await db.templateItems.get(bench.templateItemId!))!.targets.map((t) => t.w)).toEqual([62.5, 62.5, 62.5]) // plantilla intacta
+
+    // Aplicada al empezar
+    const s2 = await startSession('A', '2026-02-16', [bench.templateItemId!])
+    const se2 = (await db.sessionExercises.where('sessionId').equals(s2).toArray()).find((e) => e.exerciseId === bench.exerciseId)!
+    expect(se2.plan.targets.map((t) => t.w)).toEqual([65, 65, 65])
+    expect(se2.suggestion).toMatchObject({ applied: true })
+    expect(se2.suggestion!.previousTargets.map((t) => t.w)).toEqual([62.5, 62.5, 62.5])
+  })
+
+  it('solo cuenta la última vez en el MISMO tipo de sesión (press banca de la A vs. de la C)', async () => {
+    // Una sesión C posterior con press banca más ligero y medido no debe cambiar la sugerencia de la A.
+    const c = await startSession('C', '2026-02-20')
+    const cEx = (await db.sessionExercises.where('sessionId').equals(c).toArray()).find((e) => e.plan.targets.length === 2 && e.plan.targets[0].w === 55)!
+    for (let i = 0; i < 2; i++) await saveSet(cEx.id, i, { w: 55, reps: 8, rir: 3, done: true })
+    await closeSession(c)
+    const a = (await computeSuggestions('A')).find((x) => x.exercise.id === cEx.exerciseId)!
+    expect(a.suggestion.basisDate).toBe('2026-02-02') // la última A, no la C del 20/02
+    expect(a.suggestion.targets.map((t) => t.w)).toEqual([65, 65, 65])
+    const cs = (await computeSuggestions('C')).find((x) => x.exercise.id === cEx.exerciseId)!
+    expect(cs.suggestion.basisDate).toBe('2026-02-20')
+  })
+
+  it('más peso del planificado: avisa y consolida en vez de subir', async () => {
+    const id = await startSession('A', '2026-03-02')
+    const exs = await db.sessionExercises.where('sessionId').equals(id).sortBy('order')
+    const sq = exs.find((e) => e.plan.targets.length === 4)!
+    // plan 80/100/115/115; hecho 90/110/125/125 con RIR 1 en la última
+    for (const [i, kg] of [90, 110, 125, 125].entries()) await saveSet(sq.id, i, { w: kg, reps: 6, rir: i === 3 ? 1 : 2, done: true })
+    await closeSession(id)
+    const sug = (await computeSuggestions('A')).find((x) => x.exercise.id === sq.exerciseId)!.suggestion
+    expect(sug.kind).toBe('consolidar')
+    expect(sug.warnings[0]).toMatch(/más peso del planificado/)
+    expect(sug.targets.map((t) => t.w)).toEqual([90, 110, 125, 125])
   })
 })

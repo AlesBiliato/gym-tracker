@@ -5,13 +5,41 @@ import { exportAll, getSettings, saveImport, saveSettings } from '../db/repo'
 import { buildImport, type ImportResult, type RawHistory } from '../domain/importer'
 import { formatDateTime, todayISO } from '../domain/format'
 import { checkForUpdate } from '../update'
-import { PageHeader } from '../components/ui'
+import { NumField, PageHeader } from '../components/ui'
+import type { LoadType, Settings } from '../db/types'
 
 function applyTheme(t: 'auto' | 'claro' | 'oscuro') {
   const key = t === 'claro' ? 'light' : t === 'oscuro' ? 'dark' : 'auto'
   try { localStorage.setItem('theme', key) } catch { /* ignore */ }
   const dark = key === 'dark' || (key === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.classList.toggle('dark', dark)
+}
+
+const STEP_LABELS: [LoadType, string][] = [
+  ['barra', 'Barra'], ['mancuernas', 'Mancuernas'], ['máquina', 'Máquina'], ['polea', 'Polea'],
+]
+
+/** Ajustes de la progresión automática. El salto de cada ejercicio concreto se cambia en Plantillas → Catálogo. */
+function ProgressionCard({ settings }: { settings: Settings }) {
+  return (
+    <div className="card space-y-3">
+      <div>
+        <p className="font-bold">Progresión</p>
+        <p className="text-sm text-slate-500">Cuánto sube la carga cuando llegas al tope de repeticiones. Son solo sugerencias.</p>
+      </div>
+      <p className="label !mb-0">Salto por tipo de carga (kg)</p>
+      <div className="grid grid-cols-2 gap-3">
+        {STEP_LABELS.map(([k, label]) => (
+          <NumField key={k} label={label} step={0.5} value={settings.incrementsKg[k]}
+            onChange={(v) => v != null && saveSettings({ incrementsKg: { ...settings.incrementsKg, [k]: v } })} />
+        ))}
+      </div>
+      <NumField label="Barra: salto grande si fue muy fácil (RIR medio ≥ 3)" step={0.5} value={settings.barbellBigStepKg}
+        onChange={(v) => v != null && saveSettings({ barbellBigStepKg: v })} />
+      <NumField label="RIR mínimo en todas las series para subir" step={1} max={5} value={settings.minRirToProgress}
+        onChange={(v) => v != null && saveSettings({ minRirToProgress: v })} />
+    </div>
+  )
 }
 
 function VersionCard() {
@@ -116,6 +144,8 @@ export default function MorePage() {
           <p className="text-sm text-slate-500">Tus datos viven solo en este móvil. Descarga una copia de vez en cuando. (Exportación completa y resumen para Claude: fase 5.)</p>
           <button className="btn btn-soft w-full" onClick={download}>Descargar copia (JSON)</button>
         </div>
+
+        {settings && <ProgressionCard settings={settings} />}
 
         <VersionCard />
 

@@ -242,6 +242,7 @@ function WeekTab() {
           <Stat label="Cumplidas" value={`${freq.weeksOnTarget}/8`} sub="semanas" />
         </div>
         <Chart><FrequencyChart freq={freq} target={target} /></Chart>
+        <p className="mt-1 text-xs text-slate-500">Línea discontinua: objetivo de {target} sesiones por semana. La barra clara es la semana en curso.</p>
         <details className="mt-2 text-sm">
           <summary className="cursor-pointer font-medium">Ver datos</summary>
           <table className="mt-2 w-full tabular-nums">

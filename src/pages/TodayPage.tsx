@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
@@ -6,6 +6,7 @@ import { activeTemplate, getSettings, startSession } from '../db/repo'
 import { daysBetween, formatDate, todayISO, weekdayName } from '../domain/format'
 import { nextTemplateCode, orderItems, repsLabel } from '../domain/sessionPlan'
 import { PageHeader } from '../components/ui'
+import SuggestionsCard from '../components/SuggestionsCard'
 
 const CODES = ['A', 'B', 'C'] as const
 
@@ -17,9 +18,11 @@ export default function TodayPage() {
   const settings = useLiveQuery(() => getSettings(), [])
   const [pick, setPick] = useState<'A' | 'B' | 'C' | null>(null)
   const [busy, setBusy] = useState(false)
+  const [apply, setApply] = useState<string[]>([])
 
   const suggested = sessions ? nextTemplateCode(sessions.filter((s) => !s.deletedAt)) : 'A'
   const code = pick ?? suggested
+  useEffect(() => setApply([]), [code])
   const tpl = useLiveQuery(() => activeTemplate(code), [code])
   const items = useLiveQuery(
     async () => (tpl ? orderItems(await db.templateItems.where('templateId').equals(tpl.id).toArray()) : []),
@@ -35,7 +38,7 @@ export default function TodayPage() {
 
   const begin = async () => {
     setBusy(true)
-    const id = await startSession(code, today)
+    const id = await startSession(code, today, apply)
     nav(`/sesion/${id}`)
   }
 
@@ -76,11 +79,14 @@ export default function TodayPage() {
                 </button>
               ))}
             </div>
-            <button className="btn btn-primary w-full text-xl" onClick={begin} disabled={busy || !tpl}>
-              Empezar sesión {code}
+            <button className="btn btn-primary w-full flex-col gap-0 py-2 text-xl" onClick={begin} disabled={busy || !tpl}>
+              <span>Empezar sesión {code}</span>
+              {apply.length > 0 && <span className="text-sm font-normal opacity-90">con {apply.length} sugerencia{apply.length > 1 ? 's' : ''} aplicada{apply.length > 1 ? 's' : ''}</span>}
             </button>
           </div>
         )}
+
+        {!live && <SuggestionsCard code={code} apply={apply} onChange={setApply} />}
 
         {items && items.length > 0 && !live && (
           <div className="card">

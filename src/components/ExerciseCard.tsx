@@ -2,13 +2,14 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { Exercise, SessionExercise, SetLog, Settings } from '../db/types'
 import {
-  lastPerformance, saveSet, setExerciseStatus, setObs, setPlanSets, substituteExercise, undoSet,
+  applySuggestion, lastPerformance, revertSuggestion, saveSet, setExerciseStatus, setObs, setPlanSets, substituteExercise, undoSet,
 } from '../db/repo'
 import { formatDate, formatKg, formatRest } from '../domain/format'
 import { repsLabel, targetForSet } from '../domain/sessionPlan'
 import { Sheet } from './ui'
 import SetEditor, { type SetValues } from './SetEditor'
 import { useRestTimer } from './RestTimer'
+import { loadsText } from './SuggestionsCard'
 
 const STATUS_LABEL: Record<string, string> = {
   pendiente: '', en_curso: 'En curso', hecho: 'Hecho', parcial: 'Parcial', no_hecho: 'No realizado', sustituido: 'Sustituido',
@@ -114,6 +115,7 @@ export default function ExerciseCard({
         {open && (
           <div className="space-y-3 border-t border-slate-200 p-4 dark:border-slate-800">
             {plan.notes && <p className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">{plan.notes}</p>}
+            {se.suggestion && <SuggestionNote se={se} unilateral={ex.unilateral} readOnly={!!readOnly} />}
             {last && (
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 <b>Última vez</b> ({formatDate(last.date)}): {last.sets.map((s) => fmtSet(s, ex.unilateral, bodyweight)).join(' · ')}
@@ -215,6 +217,36 @@ export default function ExerciseCard({
           ))}
         </div>
       </Sheet>
+    </div>
+  )
+}
+
+/** Sugerencia de carga del ejercicio: aviso, propuesta y botón para aplicarla o deshacerla. */
+function SuggestionNote({ se, unilateral, readOnly }: { se: SessionExercise; unilateral: boolean; readOnly: boolean }) {
+  const sug = se.suggestion!
+  const before = loadsText(sug.previousTargets, unilateral)
+  const after = loadsText(sug.targets, unilateral)
+  const differs = before !== after
+  return (
+    <div className="space-y-1.5 rounded-xl bg-sky-500/10 p-3 text-sm">
+      <p className="font-semibold text-sky-700 dark:text-sky-300">
+        {sug.kind === 'subir' ? '↑ Sugerencia: subir' : sug.kind === 'consolidar' ? '⚠ Sugerencia: consolidar' : '= Sugerencia: mantener'}
+      </p>
+      <p>{sug.reason}</p>
+      {sug.warnings.map((w) => (
+        <p key={w} className="rounded-lg bg-amber-500/10 px-2 py-1 text-amber-700 dark:text-amber-300">{w}</p>
+      ))}
+      {differs && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="tabular-nums">{sug.applied ? 'Aplicada: ' : 'Propuesta: '}<b>{after}</b></span>
+          {!readOnly && (
+            <button className="btn btn-soft btn-sm shrink-0"
+              onClick={() => (sug.applied ? revertSuggestion(se.id) : applySuggestion(se.id))}>
+              {sug.applied ? 'Deshacer' : 'Aplicar'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
