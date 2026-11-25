@@ -43,6 +43,7 @@ const FRAGMENT: RawHistory = {
       ],
     },
   ],
+  // Valor inventado: el peso corporal real no se versiona.
   peso_corporal: [{ fecha: '2026-11-04', kg: 80.5, origen: 'Báscula' }],
 }
 
@@ -60,7 +61,7 @@ describe('importador con fragmento real', () => {
     expect(r.newExercises).toEqual([])
     expect(r.warnings).toEqual([])
   })
-  it('no usa el día de la semana como plantilla; sí "Sesión A" de las notas', () => {
+  it('no usa el día de la semana ni adivina por ejercicios; solo "Sesión X" de las notas', () => {
     expect(r.sessions.map((s) => s.templateCode)).toEqual([null, null, null, 'A'])
   })
   it('serie sin peso anotado: se crea con peso vacío (falta la 4.ª serie de sentadilla)', () => {

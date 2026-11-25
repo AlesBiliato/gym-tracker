@@ -150,19 +150,14 @@ export function templateCodeFrom(dia: string | undefined): 'A' | 'B' | 'C' | nul
 }
 
 /**
- * Plantilla de una sesión: 1) día literal A/B/C, 2) "Sesión X" en las notas,
- * 3) heurística: sentadilla con barra + press banca = A. Si no, null (no se adivina).
+ * Plantilla de una sesión: solo si el día es literalmente A/B/C o las notas dicen
+ * "Sesión X". Si no, null: las sesiones anteriores a la estructura A/B/C no se adivinan.
  */
-export function inferTemplateCode(
-  dia: string | undefined, notas: string | undefined, exerciseNames: string[],
-): { code: 'A' | 'B' | 'C' | null; inferred: boolean } {
+export function inferTemplateCode(dia: string | undefined, notas: string | undefined): 'A' | 'B' | 'C' | null {
   const direct = templateCodeFrom(dia)
-  if (direct) return { code: direct, inferred: false }
+  if (direct) return direct
   const m = /sesi[oó]n\s+([abc])\b/i.exec(notas ?? '')
-  if (m) return { code: m[1].toUpperCase() as 'A' | 'B' | 'C', inferred: false }
-  const names = new Set(exerciseNames.map(norm))
-  if (names.has('sentadilla') && names.has('press banca')) return { code: 'A', inferred: true }
-  return { code: null, inferred: false }
+  return m ? (m[1].toUpperCase() as 'A' | 'B' | 'C') : null
 }
 
 const MISSING_WEIGHT = /falta|no qued[oó] anotad/i
@@ -177,8 +172,7 @@ export function buildImport(raw: RawHistory, catalog: Exercise[]): ImportResult 
   for (const rs of raw.sesiones ?? []) {
     const date = parseDate(rs.fecha ?? '')
     if (!date) { res.warnings.push(`Sesión con fecha no válida: "${rs.fecha}"`); continue }
-    const { code, inferred } = inferTemplateCode(rs.dia, rs.notas, (rs.ejercicios ?? []).map((e) => e.n))
-    if (inferred) res.notes.push(`${date}: plantilla ${code} inferida por los ejercicios`)
+    const code = inferTemplateCode(rs.dia, rs.notas)
     const session: Session = {
       ...newBase(), date, templateId: null, templateCode: code, mode: 'normal', status: 'cerrada',
       notes: rs.notas ?? '',
