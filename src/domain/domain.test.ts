@@ -40,8 +40,8 @@ describe('importador', () => {
   it('fechas y esquemas', () => {
     expect(parseDate('12/01/26')).toBe('2026-01-12')
     expect(parseDate('2026-1-5')).toBe('2026-01-05')
-    expect(parseScheme('3×8-10')).toEqual({ sets: 3, repMin: 8, repMax: 10 })
-    expect(parseScheme('4x6')).toEqual({ sets: 4, repMin: 6, repMax: 6 })
+    expect(parseScheme('3×8-10')).toMatchObject({ sets: 3, repMin: 8, repMax: 10, perSide: false })
+    expect(parseScheme('4x6')).toMatchObject({ sets: 4, repMin: 6, repMax: 6 })
     expect(templateCodeFrom('Sesión A')).toBe('A')
     expect(templateCodeFrom('martes')).toBeNull()
   })

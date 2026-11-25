@@ -134,6 +134,8 @@ export interface Match extends Base {
 export interface BodyWeight extends Base {
   date: string
   kg: number
+  /** Origen del dato (báscula, calculado…). */
+  note?: string
 }
 
 export interface Settings extends Base {

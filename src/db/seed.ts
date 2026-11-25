@@ -33,7 +33,7 @@ const EX_DEFS: ExDef[] = [
   { name: 'Jalón unilateral', g: 'Espalda', load: 'polea', uni: true, aliases: ['jalon unilateral'] },
   { name: 'Remo con mancuerna en banco', g: 'Espalda', load: 'mancuernas', uni: true, aliases: ['remo con mancuerna', 'remo mancuerna', 'remo unilateral con mancuerna'] },
   { name: 'Remo unilateral en polea', g: 'Espalda', load: 'polea', uni: true, aliases: ['remo en polea', 'remo polea unilateral'] },
-  { name: 'Remo con pecho apoyado unilateral', g: 'Espalda', load: 'máquina', uni: true, aliases: ['remo pecho apoyado', 'remo con pecho apoyado', 'remo apoyado unilateral'] },
+  { name: 'Remo con pecho apoyado unilateral', g: 'Espalda', load: 'máquina', uni: true, aliases: ['remo pecho apoyado unilateral', 'remo pecho apoyado','remo con pecho apoyado', 'remo apoyado unilateral'] },
   { name: 'Elevaciones laterales en polea', g: 'Hombro y prevención', load: 'polea', uni: true, role: 'accesorio', aliases: ['elevaciones laterales', 'laterales en polea', 'elevación lateral en polea'] },
   { name: 'Reverse fly en polea', g: 'Hombro y prevención', load: 'polea', uni: true, role: 'accesorio', aliases: ['reverse fly', 'pájaros en polea', 'pajaros en polea'] },
   { name: 'Rotaciones externas', g: 'Hombro y prevención', load: 'polea', uni: true, role: 'accesorio', aliases: ['rotación externa', 'rotaciones externas en polea', 'rotacion externa'] },

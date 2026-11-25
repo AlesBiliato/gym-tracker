@@ -51,6 +51,8 @@ describe.skipIf(!existsSync(FILE))('historial real (data/, no versionado)', () =
         `Series: ${r.sets.length} (sin peso: ${sinPeso}, con reps/RIR reales: ${r.sets.filter((s) => !s.estimated).length})`,
         `Peso corporal: ${r.bodyWeights.length}`,
         `Ejercicios nuevos: ${r.newExercises.map((e) => e.name).join(' | ') || '—'}`,
+        `Plantilla por sesión: ${r.sessions.map((s) => `${s.date}=${s.templateCode ?? '–'}`).join(' ')}`,
+        `Notas: ${r.notes.join(' | ') || '—'}`,
         `Avisos (${r.warnings.length}):`,
         ...r.warnings.map((w) => ` - ${w}`),
       ].join('\n'),
