@@ -1,13 +1,89 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { shouldClose, sheetTouchAction } from './sheetGesture'
 import { formatKg, parseNumber } from '../domain/format'
 
-/** Hoja inferior (bottom sheet) pensada para el pulgar. */
+/**
+ * Hoja inferior (bottom sheet) pensada para el pulgar.
+ * - Mientras está abierta, la pantalla de detrás NO hace scroll.
+ * - Se cierra deslizando hacia abajo (desde arriba del contenido o desde el fondo oscuro) o tocando fuera.
+ * - Si el contenido es largo, se hace scroll dentro de la hoja sin arrastrar nada más.
+ */
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: ReactNode }) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const [dy, setDy] = useState(0)
+  const [dragging, setDragging] = useState(false)
+
+  // Bloquea el scroll de la página de detrás (escritorio y rueda del ratón).
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [open])
+
+  // Gestos táctiles: listeners nativos NO pasivos, para poder impedir el scroll del fondo.
+  useEffect(() => {
+    const overlay = overlayRef.current
+    const panel = panelRef.current
+    if (!open || !overlay || !panel) return
+    let startY = 0
+    let startScroll = 0
+    let inside = false
+    let drag = false
+    let lastDy = 0
+
+    const onStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY
+      inside = panel.contains(e.target as Node)
+      startScroll = panel.scrollTop
+      drag = false
+      lastDy = 0
+    }
+    const onMove = (e: TouchEvent) => {
+      const delta = e.touches[0].clientY - startY
+      const action = sheetTouchAction({
+        inside, startScrollTop: startScroll, scrollTop: panel.scrollTop, scrollHeight: panel.scrollHeight,
+        clientHeight: panel.clientHeight, delta, dragging: drag,
+      })
+      if (action === 'allow') return
+      if (e.cancelable) e.preventDefault()
+      if (action === 'drag') {
+        if (!drag) { drag = true; setDragging(true) }
+        lastDy = Math.max(0, delta)
+        setDy(lastDy)
+      }
+    }
+    const onEnd = () => {
+      if (!drag) return
+      drag = false
+      setDragging(false)
+      if (shouldClose(lastDy)) onCloseRef.current()
+      else setDy(0)
+    }
+    overlay.addEventListener('touchstart', onStart, { passive: true })
+    overlay.addEventListener('touchmove', onMove, { passive: false })
+    overlay.addEventListener('touchend', onEnd)
+    overlay.addEventListener('touchcancel', onEnd)
+    return () => {
+      overlay.removeEventListener('touchstart', onStart)
+      overlay.removeEventListener('touchmove', onMove)
+      overlay.removeEventListener('touchend', onEnd)
+      overlay.removeEventListener('touchcancel', onEnd)
+      setDy(0)
+      setDragging(false)
+    }
+  }, [open])
+
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/50" onClick={onClose}>
+    <div ref={overlayRef} className="fixed inset-0 z-50 flex items-end bg-black/50" onClick={onClose}>
       <div
-        className="mx-auto max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] dark:bg-slate-900"
+        ref={panelRef}
+        className="mx-auto max-h-[88dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] dark:bg-slate-900"
+        style={{ transform: dy ? `translateY(${dy}px)` : undefined, transition: dragging ? 'none' : 'transform 0.2s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" />
