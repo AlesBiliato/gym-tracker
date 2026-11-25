@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { formatClock } from '../domain/format'
 
 interface TimerCtx {
@@ -74,11 +74,14 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id)
   }, [end, stop])
 
+  const token = end?.token ?? null
+  const ctx = useMemo(() => ({ start, stop, token }), [start, stop, token])
+
   const remaining = end ? Math.ceil((end.endAt - Date.now()) / 1000) : 0
   const over = end != null && remaining <= 0
 
   return (
-    <Ctx.Provider value={{ start, stop, token: end?.token ?? null }}>
+    <Ctx.Provider value={ctx}>
       {children}
       {end && (
         <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md px-3">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Exercise, SetLog } from '../db/types'
 import { NumField, Sheet, Toggle } from './ui'
 
@@ -14,11 +14,17 @@ export default function SetEditor({
   const [v, setV] = useState<SetValues>({ w: null, l: null, r: null, reps: null, rir: null, failed: false })
   const [sides, setSides] = useState(false)
 
+  // El editor se rellena SOLO al abrirlo (o al cambiar de serie). `initial` es un objeto nuevo en cada
+  // redibujado de la tarjeta (el temporizador la redibuja varias veces por segundo): si fuera una
+  // dependencia, lo que escribes se borraría solo.
+  const initialRef = useRef(initial)
+  initialRef.current = initial
   useEffect(() => {
     if (!open) return
-    setV({ w: null, l: null, r: null, reps: null, rir: null, failed: false, ...initial })
-    setSides(initial.repsL != null || initial.repsR != null)
-  }, [open, initial])
+    const i = initialRef.current
+    setV({ w: null, l: null, r: null, reps: null, rir: null, failed: false, ...i })
+    setSides(i.repsL != null || i.repsR != null)
+  }, [open, index])
 
   const set = (p: Partial<SetValues>) => setV((c) => ({ ...c, ...p }))
   const isBodyweight = ex.loadType === 'peso corporal'
