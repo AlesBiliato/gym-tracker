@@ -86,7 +86,7 @@ export interface Session extends Base {
   imported?: boolean
 }
 
-export type ExerciseStatus = 'pendiente' | 'hecho' | 'no_hecho' | 'sustituido' | 'parcial'
+export type ExerciseStatus = 'pendiente' | 'en_curso' | 'hecho' | 'no_hecho' | 'sustituido' | 'parcial'
 
 export interface SessionExercise extends Base {
   sessionId: string

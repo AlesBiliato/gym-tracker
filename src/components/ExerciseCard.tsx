@@ -11,10 +11,11 @@ import SetEditor, { type SetValues } from './SetEditor'
 import { useRestTimer } from './RestTimer'
 
 const STATUS_LABEL: Record<string, string> = {
-  pendiente: '', hecho: 'Hecho', parcial: 'Parcial', no_hecho: 'No realizado', sustituido: 'Sustituido',
+  pendiente: '', en_curso: 'En curso', hecho: 'Hecho', parcial: 'Parcial', no_hecho: 'No realizado', sustituido: 'Sustituido',
 }
 const STATUS_STYLE: Record<string, string> = {
   hecho: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  en_curso: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
   parcial: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   no_hecho: 'bg-slate-500/15 text-slate-500',
   sustituido: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',

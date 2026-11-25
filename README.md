@@ -96,3 +96,7 @@ Despliega en un host con HTTPS (por ejemplo Vercel, preset *Vite*; el router usa
 ## Privacidad
 
 Los datos viven **solo en el dispositivo** (IndexedDB); no hay servidor ni analítica. Los archivos de entrenamiento personales para importar no se versionan (`data/` está en `.gitignore`).
+
+## Licencia
+
+[MIT](LICENSE) © 2026 Alessandro Biliato

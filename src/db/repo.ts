@@ -1,7 +1,7 @@
 import { db } from './db'
 import { newBase, now } from './base'
 import { DEFAULT_SETTINGS } from './seed'
-import { orderItems, planFromItem } from '../domain/sessionPlan'
+import { deriveStatus, orderItems, planFromItem, statusOnClose } from '../domain/sessionPlan'
 import type { ImportResult } from '../domain/importer'
 import type {
   Exercise, ExerciseStatus, PlanSnapshot, Session, SessionExercise, SetLog, Settings, Template, TemplateItem,
@@ -93,15 +93,12 @@ export async function undoSet(seId: string, index: number) {
   await recomputeStatus(seId)
 }
 
-/** Estado derivado: hecho / parcial (con fallo o series sin completar) / pendiente. No pisa no_hecho ni sustituido. */
+/** Estado derivado mientras la sesión está abierta (ver `deriveStatus`). */
 async function recomputeStatus(seId: string) {
   const se = await db.sessionExercises.get(seId)
-  if (!se || se.status === 'no_hecho') return
-  const sets = (await db.sets.where('sessionExerciseId').equals(seId).toArray()).filter((s) => s.done)
-  let status: ExerciseStatus = se.status
-  if (sets.length === 0) status = se.substitutedForExerciseId ? 'sustituido' : 'pendiente'
-  else if (sets.some((s) => s.failed) || sets.length < se.plan.sets) status = 'parcial'
-  else status = se.substitutedForExerciseId ? 'sustituido' : 'hecho'
+  if (!se) return
+  const done = (await db.sets.where('sessionExerciseId').equals(seId).toArray()).filter((s) => s.done).length
+  const status = deriveStatus(se.status, done, se.plan.sets, !!se.substitutedForExerciseId)
   await db.sessionExercises.update(seId, { status, updatedAt: now() })
 }
 
@@ -136,10 +133,9 @@ export async function setSessionNotes(id: string, notes: string) {
 export async function closeSession(id: string) {
   const exs = await db.sessionExercises.where('sessionId').equals(id).toArray()
   for (const se of exs) {
-    if (se.status === 'pendiente') {
-      const n = (await db.sets.where('sessionExerciseId').equals(se.id).toArray()).filter((s) => s.done).length
-      if (n === 0) await db.sessionExercises.update(se.id, { status: 'no_hecho', updatedAt: now() })
-    }
+    const n = (await db.sets.where('sessionExerciseId').equals(se.id).toArray()).filter((s) => s.done).length
+    const status = statusOnClose(se.status, n, se.plan.sets)
+    if (status !== se.status) await db.sessionExercises.update(se.id, { status, updatedAt: now() })
   }
   await db.sessions.update(id, { status: 'cerrada', endedAt: now(), updatedAt: now() })
 }

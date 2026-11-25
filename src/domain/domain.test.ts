@@ -3,7 +3,7 @@ import { formatDate, formatKg, parseNumber, daysBetween, formatClock } from './f
 import {
   buildImport, matchExercise, parseDate, parseObs, parseScheme, parseWeights, templateCodeFrom,
 } from './importer'
-import { nextTemplateCode, orderItems, summarize, targetForSet } from './sessionPlan'
+import { deriveStatus, nextTemplateCode, orderItems, statusOnClose, summarize, targetForSet } from './sessionPlan'
 import { buildSeed } from '../db/seed'
 
 describe('formato es-ES', () => {
@@ -145,5 +145,25 @@ describe('plan de sesión', () => {
     const r = summarize(exs, { sent: 4, banca: 0, gem: 0 }, () => false)
     expect(r.notDone.map((e) => e.id)).toEqual(['gem', 'banca'])
     expect(r.skippedAccessories.map((e) => e.id)).toEqual(['gem'])
+  })
+})
+
+describe('estado del ejercicio: En curso vs Parcial', () => {
+  it('con la sesión abierta, series pendientes = en curso (nunca parcial)', () => {
+    expect(deriveStatus('pendiente', 0, 4, false)).toBe('pendiente')
+    expect(deriveStatus('pendiente', 1, 4, false)).toBe('en_curso')
+    expect(deriveStatus('en_curso', 3, 4, false)).toBe('en_curso')
+    expect(deriveStatus('en_curso', 4, 4, false)).toBe('hecho')
+  })
+  it('no pisa no_hecho y respeta la sustitución', () => {
+    expect(deriveStatus('no_hecho', 2, 4, false)).toBe('no_hecho')
+    expect(deriveStatus('pendiente', 1, 3, true)).toBe('sustituido')
+  })
+  it('al cerrar: parcial solo si quedaron series sin hacer', () => {
+    expect(statusOnClose('en_curso', 2, 4)).toBe('parcial')
+    expect(statusOnClose('en_curso', 4, 4)).toBe('hecho')
+    expect(statusOnClose('pendiente', 0, 3)).toBe('no_hecho')
+    expect(statusOnClose('no_hecho', 0, 3)).toBe('no_hecho')
+    expect(statusOnClose('sustituido', 2, 3)).toBe('sustituido')
   })
 })

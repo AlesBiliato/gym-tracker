@@ -1,4 +1,4 @@
-import type { PlanSnapshot, Session, SessionExercise, SetTarget, TemplateItem } from '../db/types'
+import type { ExerciseStatus, PlanSnapshot, Session, SessionExercise, SetTarget, TemplateItem } from '../db/types'
 
 type Code = 'A' | 'B' | 'C'
 const ORDER: Code[] = ['A', 'B', 'C']
@@ -64,4 +64,29 @@ export function summarize(
     notDone,
     skippedAccessories: notDone.filter((e) => isAccessory(e.exerciseId) || e.pairedWithId != null),
   }
+}
+
+/**
+ * Estado de un ejercicio mientras la sesión está abierta. Con series pendientes es
+ * "en_curso" (no "parcial"). "no_hecho" lo marca el usuario y no se pisa.
+ */
+export function deriveStatus(
+  current: ExerciseStatus,
+  doneSets: number,
+  plannedSets: number,
+  substituted: boolean,
+): ExerciseStatus {
+  if (current === 'no_hecho') return 'no_hecho'
+  if (substituted) return 'sustituido'
+  if (doneSets === 0) return 'pendiente'
+  return doneSets < plannedSets ? 'en_curso' : 'hecho'
+}
+
+/** Al cerrar la sesión: sin series -> no hecho; con series sin completar -> parcial. */
+export function statusOnClose(current: ExerciseStatus, doneSets: number, plannedSets: number): ExerciseStatus {
+  if (current === 'pendiente' || current === 'en_curso') {
+    if (doneSets === 0) return 'no_hecho'
+    return doneSets < plannedSets ? 'parcial' : 'hecho'
+  }
+  return current
 }

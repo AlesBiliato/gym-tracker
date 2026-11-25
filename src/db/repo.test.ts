@@ -34,8 +34,9 @@ describe('flujo de sesión (IndexedDB)', () => {
     for (let i = 0; i < rdl.plan.sets; i++) await saveSet(rdl.id, i, { w: 85, reps: 8, rir: 2, done: true })
     expect((await db.sessionExercises.get(rdl.id))!.status).toBe('hecho')
     await undoSet(rdl.id, 2)
-    expect((await db.sessionExercises.get(rdl.id))!.status).toBe('parcial')
+    expect((await db.sessionExercises.get(rdl.id))!.status).toBe('en_curso') // sesión abierta: nunca 'parcial'
     await closeSession(id)
+    expect((await db.sessionExercises.get(rdl.id))!.status).toBe('parcial') // al cerrar con series sin hacer
     const after = await db.sessionExercises.where('sessionId').equals(id).toArray()
     expect(after.filter((e) => e.status === 'no_hecho').length).toBe(exs.length - 1)
     expect((await db.sessions.get(id))!.status).toBe('cerrada')
