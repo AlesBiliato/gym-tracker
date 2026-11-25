@@ -60,6 +60,17 @@ const toNum = (s: string) => Number(s.replace(',', '.'))
  * Devuelve null si no se puede interpretar (se conservará el texto original).
  */
 export function parseWeights(s: string | undefined, unilateral: boolean, sets: number): SetTarget[] | null {
+  const out = parseWeightsRaw(s, unilateral, sets)
+  if (!out) return null
+  // "0" = sin peso (gemelos con peso corporal): no es una carga.
+  return out.map((t) => ({
+    ...(t.w !== undefined ? { w: t.w || null } : {}),
+    ...(t.l !== undefined ? { l: t.l || null } : {}),
+    ...(t.r !== undefined ? { r: t.r || null } : {}),
+  }))
+}
+
+function parseWeightsRaw(s: string | undefined, unilateral: boolean, sets: number): SetTarget[] | null {
   if (!s) return null
   const nums = s.match(NUM)
   if (!nums || nums.length === 0) return null
@@ -162,8 +173,10 @@ export function buildImport(raw: RawHistory, catalog: Exercise[]): ImportResult 
       const sets = scheme?.sets ?? 3
       let targets = parseWeights(re.s, ex.unilateral, sets)
       if (re.s && !targets) res.warnings.push(`${date} · ${re.n}: no se pudo leer "${re.s}" (guardado como observación)`)
-      targets = targets ?? []
-      const nSets = Math.max(targets.length, scheme?.sets ?? 0, targets.length ? 0 : 1)
+      const unreadable = !!re.s?.trim() && !targets
+      // Sin peso (s vacío, "peso no anotado" o ilegible): se crean las series previstas sin peso.
+      if (!targets) targets = Array.from({ length: scheme?.sets ?? 1 }, () => ({}))
+      const nSets = targets.length
       const obsInfo = parseObs(re.obs)
 
       const plan: PlanSnapshot = {
@@ -173,7 +186,7 @@ export function buildImport(raw: RawHistory, catalog: Exercise[]): ImportResult 
       const se: SessionExercise = {
         ...newBase(), sessionId: session.id, exerciseId: ex.id, templateItemId: null, order, pairedWithId: null,
         status: re.fallo ? 'parcial' : 'hecho',
-        obs: [re.obs ?? '', re.s && !targets.length ? `Pesos (importado): ${re.s}` : ''].filter(Boolean).join(' · '),
+        obs: [re.obs ?? '', unreadable ? `Pesos (importado): ${re.s}` : ''].filter(Boolean).join(' · '),
         plan, importRaw: JSON.stringify({ esq: re.esq, s: re.s, u: re.u, fallo: re.fallo }),
       }
       res.sessionExercises.push(se)

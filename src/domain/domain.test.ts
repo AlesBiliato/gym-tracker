@@ -102,7 +102,7 @@ describe('seed de plantillas', () => {
     expect(gem.pairedWithItemId).toBe(sent.id)
   })
   it('marca agujetas altas y quitables en C', () => {
-    expect(s.exercises.filter((e) => e.soreness).map((e) => e.name).sort()).toEqual(['Peso muerto rumano', 'Sentadilla búlgara'])
+    expect(s.exercises.filter((e) => e.soreness).map((e) => e.name).sort()).toEqual(['Peso muerto rumano', 'Peso muerto rumano con mancuernas', 'Sentadilla búlgara'])
     const c = s.templateItems.filter((i) => i.templateId === s.templates[2].id && i.removableNearMatch)
     expect(c.map((i) => s.exercises.find((e) => e.id === i.exerciseId)!.name).sort()).toEqual(['Curl femoral unilateral', 'Hack squat'])
   })

@@ -20,6 +20,7 @@ const EX_DEFS: ExDef[] = [
   { name: 'Sentadilla', g: 'Piernas', load: 'barra', aliases: ['sentadilla trasera', 'squat', 'sentadilla con barra'] },
   { name: 'Sentadilla búlgara', g: 'Piernas', load: 'mancuernas', uni: true, soreness: true, aliases: ['bulgara', 'búlgara', 'sentadilla bulgara'] },
   { name: 'Peso muerto rumano', g: 'Piernas', load: 'barra', soreness: true, aliases: ['rumano', 'pmr', 'peso muerto rumano con barra'] },
+  { name: 'Peso muerto rumano con mancuernas', g: 'Piernas', load: 'mancuernas', soreness: true, aliases: ['rumano con mancuernas', 'pmr con mancuernas'] },
   { name: 'Hack squat', g: 'Piernas', load: 'máquina', aliases: ['hack', 'sentadilla hack'] },
   { name: 'Curl femoral unilateral', g: 'Piernas', load: 'máquina', uni: true, aliases: ['curl femoral unilateral en máquina', 'curl femoral unilateral (máquina)', 'curl femoral', 'femoral'] },
   { name: 'Curl femoral con mancuernas', g: 'Piernas', load: 'mancuernas', uni: true, aliases: ['curl femoral con mancuerna'] },
@@ -46,6 +47,8 @@ const EX_DEFS: ExDef[] = [
 ]
 
 const SUBSTITUTES: Record<string, string[]> = {
+  'Peso muerto rumano': ['Peso muerto rumano con mancuernas'],
+  'Peso muerto rumano con mancuernas': ['Peso muerto rumano'],
   'Curl femoral unilateral': ['Curl femoral con mancuernas'],
   'Curl femoral con mancuernas': ['Curl femoral unilateral'],
   'Jalón en máquina': ['Jalón unilateral'],
@@ -190,7 +193,13 @@ export function buildSeed(today: string): SeedData {
 }
 
 export async function ensureSeed(db: GymDB, today: string): Promise<boolean> {
-  if ((await db.exercises.count()) > 0) return false
+  if ((await db.exercises.count()) > 0) {
+    // Bases ya sembradas: añade ejercicios nuevos del catálogo sin tocar nada existente.
+    const have = new Set((await db.exercises.toArray()).map((e) => e.name))
+    const missing = buildSeed(today).exercises.filter((e) => !have.has(e.name))
+    if (missing.length) await db.exercises.bulkAdd(missing)
+    return false
+  }
   const s = buildSeed(today)
   await db.transaction('rw', [db.exercises, db.templates, db.templateItems, db.settings], async () => {
     await db.exercises.bulkAdd(s.exercises)

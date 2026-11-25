@@ -7,3 +7,4 @@ dev-dist
 /datos-privados/
 historial-gimnasio-*.json
 .claude/
+/data/
