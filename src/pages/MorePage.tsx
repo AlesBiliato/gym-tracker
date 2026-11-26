@@ -4,6 +4,7 @@ import { db } from '../db/db'
 import { exportAll, getSettings, saveImport, saveSettings } from '../db/repo'
 import { buildImport, type ImportResult, type RawHistory } from '../domain/importer'
 import { formatDateTime, todayISO } from '../domain/format'
+import { buildClaudeSummary } from '../domain/summary'
 import { checkForUpdate } from '../update'
 import { NumField, PageHeader } from '../components/ui'
 import type { LoadType, Settings } from '../db/types'
@@ -70,6 +71,7 @@ export default function MorePage() {
   }), [])
   const [preview, setPreview] = useState<ImportResult | null>(null)
   const [msg, setMsg] = useState('')
+  const [summaryMsg, setSummaryMsg] = useState('')
 
   const onFile = async (f: File | undefined) => {
     if (!f) return
@@ -99,6 +101,22 @@ export default function MorePage() {
     a.download = `gym-tracker-copia-${todayISO()}.json`
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+  }
+
+  const copySummary = async () => {
+    const text = buildClaudeSummary(await exportAll(), todayISO())
+    try {
+      await navigator.clipboard.writeText(text)
+      setSummaryMsg('Resumen copiado. Pégalo en tu conversación con Claude.')
+    } catch {
+      // Sin permiso de portapapeles: se descarga como archivo.
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }))
+      a.download = `gym-tracker-resumen-${todayISO()}.md`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+      setSummaryMsg('No se pudo copiar; se ha descargado como archivo .md.')
+    }
   }
 
   return (
@@ -141,8 +159,15 @@ export default function MorePage() {
 
         <div className="card space-y-3">
           <p className="font-bold">Copia de seguridad</p>
-          <p className="text-sm text-slate-500">Tus datos viven solo en este móvil. Descarga una copia de vez en cuando. (Exportación completa y resumen para Claude: fase 5.)</p>
+          <p className="text-sm text-slate-500">Tus datos viven solo en este móvil. Descarga una copia de vez en cuando.</p>
           <button className="btn btn-soft w-full" onClick={download}>Descargar copia (JSON)</button>
+        </div>
+
+        <div className="card space-y-3">
+          <p className="font-bold">Resumen para Claude</p>
+          <p className="text-sm text-slate-500">Texto con tu última sesión, la comparación con la vez anterior, frecuencia, volumen y peso corporal. Cópialo y pégalo en una conversación para que te lo analice.</p>
+          <button className="btn btn-primary w-full" onClick={copySummary}>Copiar resumen</button>
+          {summaryMsg && <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{summaryMsg}</p>}
         </div>
 
         {settings && <ProgressionCard settings={settings} />}
