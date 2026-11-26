@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { activeTemplate, getSettings, startSession } from '../db/repo'
+import { activeTemplate, computeAdjustments, getSettings, startSession } from '../db/repo'
 import { daysBetween, formatDate, todayISO, weekdayName } from '../domain/format'
 import { nextTemplateCode, orderItems, repsLabel } from '../domain/sessionPlan'
-import { PageHeader } from '../components/ui'
+import { PageHeader, Toggle } from '../components/ui'
 import SuggestionsCard from '../components/SuggestionsCard'
+import WeekCard from '../components/WeekCard'
 
 const CODES = ['A', 'B', 'C'] as const
 
@@ -19,6 +20,7 @@ export default function TodayPage() {
   const [pick, setPick] = useState<'A' | 'B' | 'C' | null>(null)
   const [busy, setBusy] = useState(false)
   const [apply, setApply] = useState<string[]>([])
+  const [useWeek, setUseWeek] = useState(true)
 
   const suggested = sessions ? nextTemplateCode(sessions.filter((s) => !s.deletedAt)) : 'A'
   const code = pick ?? suggested
@@ -29,6 +31,9 @@ export default function TodayPage() {
     [tpl?.id],
   )
 
+  const adjustments = useLiveQuery(() => computeAdjustments(code), [code, sessions?.length])
+  const adjBy = new Map((adjustments ?? []).map((a) => [a.itemId, a]))
+
   if (!sessions || !exercises) return <PageHeader title="Hoy" />
   const live = sessions.find((s) => s.status === 'en_curso' && !s.deletedAt)
   const closed = sessions.filter((s) => s.status === 'cerrada' && !s.deletedAt).sort((a, b) => b.date.localeCompare(a.date))
@@ -38,7 +43,7 @@ export default function TodayPage() {
 
   const begin = async () => {
     setBusy(true)
-    const id = await startSession(code, today, apply)
+    const id = await startSession(code, today, apply, useWeek && adjBy.size > 0)
     nav(`/sesion/${id}`)
   }
 
@@ -53,6 +58,8 @@ export default function TodayPage() {
             <Link to={`/sesion/${live.id}`} className="btn btn-primary w-full">Continuar</Link>
           </div>
         )}
+
+        {!live && <WeekCard />}
 
         {gap != null && gap > (settings?.readaptationAfterDays ?? 10) && (
           <div className="card bg-amber-50 ring-amber-300 dark:bg-amber-950/40 dark:ring-amber-700">
@@ -79,6 +86,10 @@ export default function TodayPage() {
                 </button>
               ))}
             </div>
+            {adjBy.size > 0 && (
+              <Toggle label="Ajustar a la semana" checked={useWeek} onChange={setUseWeek}
+                hint={useWeek ? "Aplico los cambios marcados abajo" : "Sesión tal cual la plantilla"} />
+            )}
             <button className="btn btn-primary w-full flex-col gap-0 py-2 text-xl" onClick={begin} disabled={busy || !tpl}>
               <span>Empezar sesión {code}</span>
               {apply.length > 0 && <span className="text-sm font-normal opacity-90">con {apply.length} sugerencia{apply.length > 1 ? 's' : ''} aplicada{apply.length > 1 ? 's' : ''}</span>}
@@ -92,12 +103,19 @@ export default function TodayPage() {
           <div className="card">
             <p className="mb-2 font-semibold">Qué incluye</p>
             <ul className="space-y-1.5">
-              {items.map((it) => (
-                <li key={it.id} className={`flex justify-between gap-2 ${it.pairedWithItemId ? 'pl-5 text-slate-500' : ''}`}>
-                  <span>{it.pairedWithItemId ? '↳ ' : ''}{exName(it.exerciseId)}</span>
-                  <span className="shrink-0 tabular-nums text-slate-500">{it.sets}×{repsLabel(it)}</span>
-                </li>
-              ))}
+              {items.map((it) => {
+                const adj = useWeek ? adjBy.get(it.id) : undefined
+                const removed = adj?.kind === 'quitar'
+                return (
+                  <li key={it.id} className={`flex justify-between gap-2 ${it.pairedWithItemId ? 'pl-5 text-slate-500' : ''} ${removed ? 'line-through opacity-50' : ''}`}>
+                    <span>{it.pairedWithItemId ? '↳ ' : ''}{exName(it.exerciseId)}</span>
+                    <span className="shrink-0 tabular-nums text-slate-500">
+                      {adj?.kind === 'mas_series' && <span className="mr-1 font-semibold text-emerald-600 dark:text-emerald-400">+1</span>}
+                      {adj?.kind === 'mas_series' ? adj.sets : it.sets}×{repsLabel(it)}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}

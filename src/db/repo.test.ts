@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { db } from './db'
 import { ensureSeed } from './seed'
 import {
-  applySuggestion, closeSession, computeSuggestions, duplicateTemplate, lastPerformance, saveImport, saveSet, revertSuggestion, startSession, substituteExercise, undoSet,
+  applySuggestion, closeSession, computeSuggestions, duplicateTemplate, getSettings, lastPerformance, saveImport, saveSet, revertSuggestion, startSession, substituteExercise, undoSet,
 } from './repo'
 import { buildImport } from '../domain/importer'
 
@@ -143,5 +143,43 @@ describe('progresión (IndexedDB)', () => {
     expect(sug.kind).toBe('consolidar')
     expect(sug.warnings[0]).toMatch(/más peso del planificado/)
     expect(sug.targets.map((t) => t.w)).toEqual([90, 110, 125, 125])
+  })
+})
+
+describe('ajuste semanal (IndexedDB)', () => {
+  it('con partido importante cerca quita las piernas principales y marca la sesión como ajustada', async () => {
+    await db.matches.add({
+      id: 'm1', date: '2026-04-11', time: '12:00', rival: 'X', home: true, importance: 'importante', notes: '',
+      createdAt: '', updatedAt: '', deviceId: 'd',
+    })
+    const id = await startSession('A', '2026-04-09', [], true) // jueves: partido el sábado
+    const exs = await db.sessionExercises.where('sessionId').equals(id).toArray()
+    const names = new Map((await db.exercises.toArray()).map((e) => [e.id, e]))
+    expect(exs.some((e) => names.get(e.exerciseId)!.muscleGroup === 'Piernas' && names.get(e.exerciseId)!.role === 'principal')).toBe(false)
+    expect(exs.length).toBeLessThan(7)
+    const s = await db.sessions.get(id)
+    expect(s!.mode).toBe('ajustada')
+    expect(s!.notes).toContain('quitado')
+  })
+
+  it('sin pedir el ajuste la sesión sale igual que la plantilla', async () => {
+    const id = await startSession('A', '2026-04-09')
+    expect(await db.sessionExercises.where('sessionId').equals(id).count()).toBe(7)
+    expect((await db.sessions.get(id))!.mode).toBe('normal')
+  })
+
+  it('semana sin partido confirmada: +1 serie en principales, y esa serie extra no penaliza la progresión', async () => {
+    await db.matches.clear()
+    await db.settings.put({ ...(await getSettings()), noMatchWeek: '2026-05-04' })
+    const id = await startSession('A', '2026-05-06', [], true)
+    const exs = await db.sessionExercises.where('sessionId').equals(id).toArray()
+    const boosted = exs.filter((e) => e.extraSets === 1)
+    expect(boosted.length).toBeGreaterThan(0)
+    const e = boosted[0]
+    const planned = e.plan.sets
+    for (let i = 0; i < planned - 1; i++) await saveSet(e.id, i, { w: 50, reps: 8, rir: 2, done: true }) // sin la serie extra
+    await closeSession(id)
+    const last = await lastPerformance(e.exerciseId)
+    expect(last!.plan.sets).toBe(planned - 1)
   })
 })

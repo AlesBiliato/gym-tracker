@@ -36,7 +36,7 @@ Registrar series en el móvil entre serie y serie suele ser lento y propenso a e
 | 1 | Catálogo de ejercicios, plantillas A/B/C, registro en el gimnasio, importación de historial | ✅ |
 | 2 | Historial por ejercicio, gráficas (Recharts), volumen semanal por grupo muscular, frecuencia y racha, peso corporal | ✅ |
 | 3 | Progresión doble automática (sugerencias siempre editables) | ✅ |
-| 4 | Calendario de partidos, ajuste semanal y sesión de readaptación tras un parón | ⏳ |
+| 4 | Calendario de partidos con importancia y ajuste semanal de la sesión (✅); sesión de readaptación tras un parón (⏳) | ⏳ |
 | 5 | Exportar JSON/CSV y resumen de las últimas semanas para pegar en un chat | ⏳ |
 
 Ya disponible (fases 1 a 3):

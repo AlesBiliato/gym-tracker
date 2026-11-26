@@ -130,7 +130,7 @@ export function buildClaudeSummary(data: SummaryInput, today: string, target = 3
   const upcoming = live(data.matches).filter((m) => m.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3)
   if (upcoming.length) {
     out.push('\n## Próximos partidos')
-    for (const m of upcoming) out.push(`- ${weekdayName(m.date)} ${formatDate(m.date)} ${m.time} vs ${m.rival}${m.notes.trim() ? ` · ${m.notes.trim()}` : ''}`)
+    for (const m of upcoming) out.push(`- ${weekdayName(m.date)} ${formatDate(m.date)} ${m.time} vs ${m.rival} (importancia: ${m.importance ?? 'normal'})${m.notes.trim() ? ` · ${m.notes.trim()}` : ''}`)
   }
 
   out.push('\n---\nAnaliza esta sesión: progresión frente a la vez anterior, calidad del esfuerzo (RIR real vs objetivo), volumen por grupo y qué ajustar en la próxima.')

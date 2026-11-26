@@ -101,6 +101,8 @@ export interface SessionExercise extends Base {
   substitutedForExerciseId?: string | null
   obs: string
   plan: PlanSnapshot
+  /** Series añadidas por el ajuste semanal (opcionales: no cuentan como "incompleta" al sugerir). */
+  extraSets?: number
   /** Texto original del importador, por trazabilidad. */
   importRaw?: string
   /** Sugerencia de carga calculada al empezar la sesión (siempre editable; nunca impuesta). */
@@ -135,7 +137,14 @@ export interface SetLog extends Base {
   estimated?: boolean
 }
 
+/** Qué te juegas: condiciona cuánto se protegen las piernas antes y cuánta carga admite la semana. */
+export const MATCH_IMPORTANCES = ['facil', 'normal', 'importante'] as const
+export type MatchImportance = (typeof MATCH_IMPORTANCES)[number]
+export const IMPORTANCE_LABEL: Record<MatchImportance, string> = { facil: 'Fácil', normal: 'Normal', importante: 'Importante' }
+
 export interface Match extends Base {
+  /** Si falta (partidos antiguos), se trata como "normal". */
+  importance?: MatchImportance
   date: string
   time: string
   rival: string
@@ -163,4 +172,6 @@ export interface Settings extends Base {
   readaptationPct: number
   volleyDays: number[] // 0 domingo ... 6 sábado
   gymWeekdays: number[]
+  /** Lunes de la semana en la que se confirmó "sin partido". */
+  noMatchWeek?: string
 }

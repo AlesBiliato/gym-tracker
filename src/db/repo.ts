@@ -4,8 +4,11 @@ import { DEFAULT_SETTINGS } from './seed'
 import { deriveStatus, orderItems, planFromItem, statusOnClose } from '../domain/sessionPlan'
 import { suggestProgression, type Suggestion } from '../domain/progression'
 import type { ImportResult } from '../domain/importer'
+import { todayISO } from '../domain/format'
+import { flattenSets, weeklyVolume } from '../domain/stats'
+import { adjustSession, planWeek, type Adjustment, type WeekPlan } from '../domain/weekPlan'
 import type {
-  Exercise, ExerciseStatus, PlanSnapshot, Session, SessionExercise, SetLog, Settings, Template, TemplateItem,
+  Exercise, ExerciseStatus, Match, PlanSnapshot, Session, SessionExercise, SetLog, Settings, Template, TemplateItem,
 } from './types'
 
 export async function getSettings(): Promise<Settings> {
@@ -26,13 +29,22 @@ export async function activeTemplate(code: 'A' | 'B' | 'C'): Promise<Template | 
 
 /** Crea la sesión de hoy con todo precargado desde la plantilla activa. */
 /** `applyItemIds`: ids de TemplateItem cuya sugerencia se aplica ya. El resto queda disponible para aplicar desde el ejercicio. */
-export async function startSession(code: 'A' | 'B' | 'C', date: string, applyItemIds: string[] = []): Promise<string> {
+/** `adjust`: aplica el ajuste de la semana (partido cerca / semana holgada) a esta sesión. */
+export async function startSession(code: 'A' | 'B' | 'C', date: string, applyItemIds: string[] = [], adjust = false): Promise<string> {
   const tpl = await activeTemplate(code)
   if (!tpl) throw new Error(`No hay plantilla ${code}`)
-  const items = orderItems((await db.templateItems.where('templateId').equals(tpl.id).toArray()).filter((i) => !i.deletedAt))
+  const allItems = orderItems((await db.templateItems.where('templateId').equals(tpl.id).toArray()).filter((i) => !i.deletedAt))
+  const adjustments = adjust ? await computeAdjustments(code, date) : []
+  const adjBy = new Map(adjustments.map((a) => [a.itemId, a]))
+  const items = allItems.filter((i) => adjBy.get(i.id)?.kind !== 'quitar')
+  const exById = new Map((await db.exercises.toArray()).map((e) => [e.id, e.name]))
   const session: Session = {
-    ...newBase(), date, templateId: tpl.id, templateCode: code, mode: 'normal', status: 'en_curso',
-    notes: '', startedAt: now(),
+    ...newBase(), date, templateId: tpl.id, templateCode: code, mode: adjustments.length ? 'ajustada' : 'normal', status: 'en_curso',
+    notes: adjustments.length ? 'Ajuste de la semana: ' + adjustments.map((a) => {
+      const it = allItems.find((i) => i.id === a.itemId)
+      return `${it ? exById.get(it.exerciseId) ?? '?' : '?'} (${a.kind === 'quitar' ? 'quitado' : '+1 serie'})`
+    }).join(', ') : '',
+    startedAt: now(),
   }
   const suggestions = new Map((await computeSuggestions(code)).map((x) => [x.item.id, x.suggestion]))
   const apply = new Set(applyItemIds)
@@ -50,6 +62,12 @@ export async function startSession(code: 'A' | 'B' | 'C', date: string, applyIte
         reason: sug.reason, warnings: sug.warnings, basisDate: sug.basisDate, applied,
       }
       if (applied) se.plan = { ...se.plan, targets: sug.targets.map((t) => ({ ...t })) }
+    }
+    const adj = adjBy.get(it.id)
+    if (adj?.kind === 'mas_series' && adj.sets) {
+      // targetForSet repite el último objetivo, así que no hace falta ampliar la lista de cargas.
+      se.extraSets = adj.sets - se.plan.sets
+      se.plan = { ...se.plan, sets: adj.sets }
     }
     idByItem.set(it.id, se.id)
     return se
@@ -94,7 +112,7 @@ export async function lastPerformance(
     .filter((s) => s.done && !s.deletedAt)
     .sort((a, b) => a.index - b.index)
   if (!sets.length) return null
-  return { date: best.date, sets, obs: best.se.obs, plan: best.se.plan }
+  return { date: best.date, sets, obs: best.se.obs, plan: { ...best.se.plan, sets: Math.max(1, best.se.plan.sets - (best.se.extraSets ?? 0)) } }
 }
 
 export async function saveSet(seId: string, index: number, patch: Partial<SetLog>): Promise<void> {
@@ -308,4 +326,54 @@ export async function revertSuggestion(seId: string) {
     suggestion: { ...se.suggestion, applied: false },
     updatedAt: now(),
   })
+}
+
+// ---- Partidos ----
+
+export async function saveMatch(m: Match) {
+  await db.matches.put({ ...m, updatedAt: now() })
+}
+
+export async function deleteMatch(id: string) {
+  await db.matches.update(id, { deletedAt: now(), updatedAt: now() })
+}
+
+// ---- Plan de la semana ----
+
+/** Plan de la semana con los datos locales: partidos, series de piernas ya hechas y si se confirmó "sin partido". */
+export async function weekPlanNow(today = todayISO()): Promise<WeekPlan> {
+  const [matches, sessions, exs, sets, exercises, settings] = await Promise.all([
+    db.matches.toArray(), db.sessions.toArray(), db.sessionExercises.toArray(), db.sets.toArray(),
+    db.exercises.toArray(), getSettings(),
+  ])
+  const flat = flattenSets(sessions, exs.filter((e) => !e.deletedAt), sets.filter((s) => !s.deletedAt))
+  const vol = weeklyVolume(flat, exercises, today, 1)
+  const base = planWeek({ today, matches, legSetsThisWeek: 0, targetSetsPerGroup: settings.targetSetsPerGroup })
+  return planWeek({
+    today, matches, legSetsThisWeek: vol[0]?.counts['Piernas'] ?? 0, targetSetsPerGroup: settings.targetSetsPerGroup,
+    noMatchConfirmed: settings.noMatchWeek === base.weekKey,
+  })
+}
+
+/** Cambios que el plan semanal propone para la sesión de hoy (A, B o C). */
+export async function computeAdjustments(code: 'A' | 'B' | 'C', today = todayISO()): Promise<Adjustment[]> {
+  const tpl = await activeTemplate(code)
+  if (!tpl) return []
+  const [plan, items, exercises] = await Promise.all([
+    weekPlanNow(today),
+    db.templateItems.where('templateId').equals(tpl.id).toArray(),
+    db.exercises.toArray(),
+  ])
+  const exById = new Map(exercises.map((e) => [e.id, e]))
+  return adjustSession(
+    items.filter((i) => !i.deletedAt).flatMap((i) => {
+      const e = exById.get(i.exerciseId)
+      return e ? [{ id: i.id, group: e.muscleGroup, role: e.role, sets: i.sets, removableNearMatch: i.removableNearMatch }] : []
+    }),
+    plan,
+  )
+}
+
+export async function confirmNoMatch(weekKey: string) {
+  await saveSettings({ noMatchWeek: weekKey })
 }
